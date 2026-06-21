@@ -439,3 +439,11 @@ maintainable cards — study its card implementations before generating new ones
 | `start()` called more than once | Call it exactly once; use `registerCard()` for anything that happens later |
 | RTK serializable-check warning | Pass `disableSerializableStateCheck: true` in the third arg to `start()` |
 | Mutation outside reducer | State mutations are only safe inside reducer functions (Immer context); elsewhere, return new objects |
+| Browser `SyntaxError: does not provide an export named 'PiCardRef'` | `PiCardRef` is a TypeScript **type-only** export — it has no runtime JS value. Any import without the `type` keyword causes a crash in Vite dev mode (esbuild does not enforce `verbatimModuleSyntax`). Use `import type {PiCardRef}` or inline `import {type PiCardRef, …}` everywhere. Same applies to Redux's `Store` type. |
+| Browser `SyntaxError: does not provide an export named 'Store'` (from `@reduxjs/toolkit`) | `Store` is a TypeScript type, not a runtime value. In `app.root.tsx` use `import type {Store} from "@reduxjs/toolkit"`. |
+
+> **Vite/esbuild and TypeScript type erasure**
+>
+> Vite's development server uses `esbuild` to transform TypeScript — it strips types but does **not** type-check.  This means TypeScript's `verbatimModuleSyntax: true` setting (which would normally make the compiler reject value-style imports of type-only symbols) is *not enforced* at dev time.  The import compiles fine, but at runtime the browser fetches the pre-bundled module and discovers the named export does not exist.
+>
+> **Rule of thumb:** any symbol that appears only in `.d.ts` files (not in `.js`) must be imported with `import type`.  In `@pihanga2/core` the most common type-only exports are `PiCardRef`, `ReduxState`, `PiCardDef`, and `WindowProps`; in `@reduxjs/toolkit` the most common one is `Store`.
