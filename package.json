@@ -1,0 +1,105 @@
+{
+  "name": "@pihanga2/core",
+  "version": "0.3.17",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "author": "max.ott@csiro.au",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "AGENTS.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./rest": {
+      "types": "./dist/rest/index.d.ts",
+      "default": "./dist/rest/index.js"
+    },
+    "./rest/*": {
+      "types": "./dist/rest/*.d.ts",
+      "default": "./dist/rest/*.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "types": [
+        "dist/types.d.ts"
+      ],
+      "rest": [
+        "dist/rest/index.d.ts"
+      ],
+      "rest/*": [
+        "dist/rest/*.d.ts"
+      ]
+    }
+  },
+  "keywords": [
+    "pihanga",
+    "module",
+    "library"
+  ],
+  "scripts": {
+    "docs": "yarn typedoc",
+    "build": "tsc --build && typedoc",
+    "build:watch": "tsc --build --watch",
+    "prepublishOnly": "yarn build",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "type-check": "tsc --noEmit",
+    "prettier": "prettier --write .",
+    "test:coverage": "vitest run --coverage",
+    "test:run": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.2.6",
+    "deep-equal": "^2.2.3",
+    "history": "^5.3.0",
+    "immer": "^10.1.1",
+    "stacktrace-js": "^2.0.2",
+    "tslog": "^4.9.3"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-redux": "^9.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@testing-library/dom": "^9.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.2.5",
+    "@types/deep-equal": "^1.0.4",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.15",
+    "@types/react-dom": "^18.0.6",
+    "@types/stacktrace-js": "^2.0.3",
+    "@vitest/coverage-v8": "^1.0.1",
+    "eslint": "^9.25.0",
+    "globals": "^16.0.0",
+    "jsdom": "^21.1.0",
+    "prettier": "^3.0.0",
+    "react-redux": "^9.1.0",
+    "tslib": "^2.6.2",
+    "typedoc": "^0.26.4",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.30.1",
+    "vitest": "^1.0.0"
+  }
+}

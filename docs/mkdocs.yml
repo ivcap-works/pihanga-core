@@ -1,0 +1,114 @@
+site_name: "@pihanga2/core"
+site_description: >
+  The core runtime library for the Pihanga declarative, card-based UI framework for React.
+site_url: https://ivcap-works.github.io/pihanga-core/
+repo_url: https://github.com/ivcap-works/pihanga-core
+repo_name: ivcap-works/pihanga-core
+edit_uri: edit/main/docs/docs/
+docs_dir: docs
+site_dir: site
+site_author: CSIRO Data61
+
+theme:
+  name: material
+  logo: img/logo-white.svg      # nav bar logo (replace with your own SVG/PNG)
+  favicon: img/logo-black.svg   # browser tab icon (replace with a .ico/.png for best compat)
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - Guides:
+      - Overview: guides/overview.md
+      - Building an Application: guides/deployment.md
+      - Cards: guides/cards.md
+      - Redux & Reducers: guides/redux.md
+      - Routing: guides/routing.md
+      - REST API: guides/rest-api.md
+      - REST Full Reference: guides/rest-usage.md
+  - API Reference:
+      - Overview: api/overview.md
+      - register / registerCard: api/register.md
+      - start(): api/start.md
+      - TypeScript Types: api/types.md
+  - Reference:
+      - Glossary: reference/glossary.md
+  - Community:
+      - Contributing: community/contributing.md
+
+plugins:
+  - search
+  - llmstxt-md:
+      enable_markdown_urls: true
+      enable_llms_txt: true
+      enable_llms_full: true
+      markdown_description: |
+        @pihanga2/core is the runtime engine of the Pihanga declarative,
+        card-based UI framework for React. It provides card registration,
+        Redux store bootstrap, hash/history routing, and typed REST-API helpers.
+      sections:
+        Getting Started:
+          - getting-started/installation.md
+          - getting-started/quick-start.md
+        Guides:
+          - guides/overview.md
+          - guides/deployment.md
+          - guides/cards.md
+          - guides/redux.md
+          - guides/routing.md
+          - guides/rest-api.md
+          - guides/rest-usage.md
+        API Reference:
+          - api/overview.md
+          - api/register.md
+          - api/start.md
+          - api/types.md
+        Reference:
+          - reference/glossary.md
+        Community:
+          - community/contributing.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: [".."]
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - css/extra.css
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - js/mermaid-init.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ivcap-works/pihanga-core
