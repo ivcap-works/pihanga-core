@@ -204,7 +204,7 @@ For apps that use multiple card libraries and feature modules, `start()` receive
 import { start, DEFAULT_REDUX_STATE } from "@pihanga2/core"
 import { init as pihangaInit }  from "./app.pihanga"
 import { reducerInit }          from "./app.reducer"
-import { init as cardLibInit }  from "@pihanga2/cards"   // pre-built card library
+import { init as cardLibInit }  from "@pihanga2/shadcn"   // pre-built card library
 import { AppState } from "./app.types"
 
 const initState: AppState = {
@@ -334,7 +334,7 @@ Large applications split their cards into feature-level files. Each exports a re
 
 ```ts title="src/collections.pihanga.ts"
 import { memo, onShowPage, showPage, type PiRegister } from "@pihanga2/core"
-import { Stack, List } from "@pihanga2/cards"
+import { Stack, List } from "@pihanga2/shadcn"
 import { AppState } from "./app.types"
 
 export enum CollectionCard {
@@ -471,7 +471,7 @@ Rather than building every card from scratch, use the published card libraries:
 
 | Library | Description |
 |---|---|
-| [`@pihanga2/cards`](https://ivcap-works.github.io/pihanga-shadcn/) | General-purpose cards: `Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`, `ImageViewer`, `FileDrop`, … |
+| [`@pihanga2/shadcn`](https://ivcap-works.github.io/pihanga-shadcn/) | General-purpose cards: `Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`, `ImageViewer`, `FileDrop`, … |
 | `@pihanga2/joy-ui` | MUI Joy-based layout cards: `JyPage3` (nav-bar shell), `JyLogin`, … |
 
 Browse the full card catalogue and their prop interfaces at **[https://ivcap-works.github.io/pihanga-shadcn/](https://ivcap-works.github.io/pihanga-shadcn/)**.

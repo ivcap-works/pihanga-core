@@ -159,7 +159,7 @@ src/
 ```ts
 import { start, DEFAULT_REDUX_STATE } from "@pihanga2/core"
 import { init as pihangaInit } from "./app.pihanga"
-import { init as cardLibInit } from "@pihanga2/cards"   // pre-built cards first
+import { init as cardLibInit } from "@pihanga2/shadcn"   // pre-built cards first
 import type { AppState } from "./app.types"
 
 start<AppState>(
@@ -420,7 +420,7 @@ export function reducerInit(register: PiRegister): void {
 
 **Before generating custom card code, always check whether an existing card already covers the requirement.**
 
-`@pihanga2/cards` provides ready-made cards: `Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`, `ImageViewer`, `FileDrop`, and more.
+`@pihanga2/shadcn` provides ready-made cards: `Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`, `ImageViewer`, `FileDrop`, and more.
 
 - **Source / README:** <https://github.com/ivcap-works/pihanga-shadcn>
 - **Human-readable catalogue (props & events):** <https://ivcap-works.github.io/pihanga-shadcn/>

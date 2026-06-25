@@ -1,6 +1,6 @@
 {
   "name": "@pihanga2/core",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,7 @@
   "files": [
     "dist",
     "src",
+    "README.md",
     "AGENTS.md"
   ],
   "main": "./dist/index.js",

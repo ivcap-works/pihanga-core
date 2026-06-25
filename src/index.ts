@@ -95,11 +95,10 @@ export interface PiRegister {
    * Register a meta card which expands a single card definition of type `name`
    * into a new set of cards which can be registered in turn through `registerCards`.
    *
-   * The `transformF` function takes the property declaration and uses the
-   * the common `PiRegister` to define the inner content of this meta card
+   * The `mapper` function in the declaration takes the property declaration and
+   * uses the common `PiRegister` to define the inner content of this meta card.
    *
-   * @param {string} type
-   * @param {function} mapper
+   * @param declaration - The meta card declaration containing `type`, `mapper`, and optional `events`.
    */
   metaCard<C>(declaration: PiRegisterMetaCard): void;
 
@@ -123,7 +122,8 @@ export interface PiRegister {
   reducer: PiReducer;
 }
 
-type RegisterCbk = (register: PiRegister) => void;
+/** Callback passed to {@link register} — receives the fully initialised {@link PiRegister} instance. */
+export type RegisterCbk = (register: PiRegister) => void;
 
 // These remain private and shared across all imports
 let registerF: PiRegister | null = null;

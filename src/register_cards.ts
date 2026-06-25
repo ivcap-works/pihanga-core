@@ -343,11 +343,11 @@ function processEventParameter(
  * ```
  *
  * @param filterF Function to return the part [P] of the ReduxState of interests.
- * @param mapF Function to map the result of `mapF` to the return value of type T
- * @typeparam P The type of a section of the ReduxState S.
- * @typeparam T The return type of this function call.
- * @typeparam S The type of the ReduxState which is being passed to `filterF`.
- * @typeparam C They type of specific context this card is being used StateMapperContext<C> (Primarily relevant for tables)
+ * @param mapperF Function to map the result of `filterF` to the return value of type T.
+ * @typeParam P The type of a section of the ReduxState S.
+ * @typeParam T The return type of this function call.
+ * @typeParam S The type of the ReduxState which is being passed to `filterF`.
+ * @typeParam C The type of specific context this card is being used with (primarily relevant for tables).
  * @returns The result of `mapF` if the result of `filterF` has changed, otherwise returns a previous result of `mapF`
  */
 export function memo<P, T, S extends ReduxState, C = any>(
