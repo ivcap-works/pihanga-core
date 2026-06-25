@@ -1,0 +1,2233 @@
+# @pihanga2/core
+
+> The core runtime library for the Pihanga declarative, card-based UI framework for React.
+
+
+@pihanga2/core is the runtime engine of the Pihanga declarative,
+card-based UI framework for React. It provides card registration,
+Redux store bootstrap, hash/history routing, and typed REST-API helpers.
+
+
+# Getting Started
+
+## Installation
+
+# Installation
+
+## Requirements
+
+- **Node.js** 18+
+- **React** 18+ (peer dependency)
+- **react-dom** 18+ (peer dependency)
+- **react-redux** 9+ (peer dependency)
+
+## Install the package
+
+=== "yarn"
+
+    ```bash
+    yarn add @pihanga2/core react react-dom react-redux
+    ```
+
+=== "npm"
+
+    ```bash
+    npm install @pihanga2/core react react-dom react-redux
+    ```
+
+=== "pnpm"
+
+    ```bash
+    pnpm add @pihanga2/core react react-dom react-redux
+    ```
+
+## TypeScript
+
+`@pihanga2/core` ships with full TypeScript declarations. No separate `@types/` package is required.
+
+Ensure your `tsconfig.json` targets at least `ES2019` and uses `moduleResolution: bundler` (or `node16`):
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true
+  }
+}
+```
+
+## Entry points
+
+| Import path | Contents |
+|---|---|
+| `@pihanga2/core` | Main API — `register`, `start`, `Card`, `usePiReducer`, … |
+| `@pihanga2/core/types` | TypeScript types only (no runtime code) |
+| `@pihanga2/core/rest` | REST registration helpers |
+
+
+## Quick Start
+
+# Quick Start
+
+This guide shows you how to bootstrap a minimal Pihanga application from scratch.
+
+## 1. Create the entry point
+
+```ts title="src/main.ts"
+import { start, DEFAULT_REDUX_STATE } from "@pihanga2/core";
+import { myInit } from "./app.pihanga";
+import type { AppState } from "./app.types";
+
+const initState: AppState = {
+  ...DEFAULT_REDUX_STATE,   // required — seeds routing and framework slices
+  title: "My App",
+};
+
+start(initState, [myInit]);
+```
+
+## 2. Define your state type
+
+```ts title="src/app.types.ts"
+import type { PiCardRef, ReduxState } from "@pihanga2/core";
+
+export type AppState = ReduxState & {
+  title: string;
+  activePage: PiCardRef;
+};
+```
+
+## 3. Register cards
+
+```ts title="src/app.pihanga.ts"
+import { type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function myInit(register: PiRegister): void {
+  // Register the top-level window card — page prop drives which card is shown
+  register.window<AppState>({
+    page: (s) => s.activePage,
+  });
+
+  // Register a named card instance
+  register.card("page/home", {
+    cardType: "my/page",
+    title: (s: AppState) => s.title,
+  });
+}
+```
+
+## 4. Mount point
+
+Pihanga mounts itself onto `document.getElementById("root")`. Ensure your `index.html` has:
+
+```html title="index.html"
+<div id="root"></div>
+```
+
+## 5. Register a card component
+
+Card *components* (React implementations) are registered separately from card *instances*.
+Use `registerCardComponent` — it is buffered and safe to call at module load time:
+
+```ts title="src/cards/myPage/index.ts"
+import { registerCardComponent, actionTypesToEvents } from "@pihanga2/core";
+import { MY_PAGE, MY_PAGE_ACTIONS, MyPageComponent } from "./myPage";
+
+registerCardComponent({
+  name: MY_PAGE,
+  component: MyPageComponent,
+  events: MY_PAGE_ACTIONS,
+});
+```
+
+```tsx title="src/cards/myPage/myPage.tsx"
+import React from "react";
+import { createCardDeclaration, registerActions, actionTypesToEvents, type PiCardProps } from "@pihanga2/core";
+
+export const MY_PAGE = "my/page";
+
+export type MyPageProps   = { title: string };
+export type MyPageEvents  = { onTitleClick: { title: string } };
+
+// Card factory — MyPage({ title: "Home", onTitleClick: ... })
+export const MyPage = createCardDeclaration<MyPageProps, MyPageEvents>(MY_PAGE);
+
+export const MY_PAGE_ACTIONS = actionTypesToEvents(
+  registerActions(MY_PAGE, ["titleClick"])
+);
+
+export function MyPageComponent({
+  title,
+  onTitleClick,
+}: PiCardProps<MyPageProps, MyPageEvents>) {
+  return (
+    <h1 onClick={() => onTitleClick({ title })}>
+      {title}
+    </h1>
+  );
+}
+```
+
+## Next steps
+
+- [Building an Application](../guides/deployment.md) — full app anatomy (counter → multi-page)
+- [Cards guide](../guides/cards.md) — full card lifecycle with typed props & events
+- [Redux & Reducers guide](../guides/redux.md) — state management patterns
+- [Routing guide](../guides/routing.md) — navigation with `showPage` / `onShowPage`
+- [REST API guide](../guides/rest-api.md) — data fetching wired into Redux
+
+
+# Guides
+
+## Overview
+
+# Guides Overview
+
+| Guide | What you'll learn |
+|---|---|
+| [Building an Application](deployment.md) | End-to-end anatomy of a Pihanga app — entry point, state, layout, routing, event handling, and custom cards |
+| [Cards](cards.md) | Define card types with props & events; register components and instances |
+| [Redux & Reducers](redux.md) | React to Redux actions in and out of components |
+| [Routing](routing.md) | Navigate between pages; react to route changes |
+| [REST API](rest-api.md) | Register typed fetch handlers that hook into Redux |
+
+
+## Building an Application
+
+# Building a Pihanga Application
+
+This guide walks you through the anatomy of a real Pihanga application, from the minimal counter up to a multi-page app with routing, auth, and REST data fetching.
+
+---
+
+## Core concept — late binding
+
+The key idea that distinguishes Pihanga from plain React is **late binding of card slots**.
+
+### Standard React — component hierarchy is fixed at compile time
+
+```mermaid
+flowchart LR
+    State["Redux State"] -->|"ui(state)"| React["React Component Tree\n(hard-coded hierarchy)"]
+    React -->|"user events → actions"| Reducer["Reducer"]
+    Reducer -->|"new state"| State
+```
+
+In ordinary React a parent component hard-codes its children at compile time:
+
+```tsx
+// Standard React — parent always renders BooCard, wired at compile time
+<BooCard p1={...} p2={...} />
+```
+
+### Pihanga — card slots are resolved at runtime from Redux state
+
+```mermaid
+flowchart LR
+    State["Redux State"] -->|"state mappers"| Props["Card Props"]
+    Props --> Registry["Card Registry\nname → component"]
+    Registry -->|"runtime lookup"| Tree["React Card Tree"]
+    Tree -->|"user events → actions"| Reducer["Reducer"]
+    Reducer -->|"new state"| State
+```
+
+In Pihanga a parent card holds a *named slot*; the actual card that fills that slot is resolved at runtime from the global registry:
+
+```tsx
+// Pihanga — parent only knows the slot name; binding happens at render time
+<Card cardName={contentCard} parentCard={cardName} />
+```
+
+The value of `contentCard` is derived from Redux state, so **changing one field in the store can swap out an entire sub-tree of the UI** with no component-level code changes. This is what makes Pihanga layouts truly declarative and trivially extensible.
+
+!!! tip "See also"
+    The [home page](../index.md#core-concept-late-binding) has a concrete worked example of
+    state-driven card swapping (`cars` / `trucks`) that illustrates this pattern.
+
+---
+
+## Minimal example — a counter
+
+The smallest complete Pihanga app is a counter. It contains only three files and illustrates every fundamental concept.
+
+### `src/app.state.ts`
+
+```ts
+import type { ReduxState } from "@pihanga2/core"
+
+export type AppState = ReduxState & {
+  count: number
+}
+```
+
+`AppState` extends the framework's `ReduxState` (which carries the routing slice and other built-ins) and adds only a single domain field.
+
+### `src/main.ts`
+
+```ts
+import { start, DEFAULT_REDUX_STATE } from "@pihanga2/core"
+import { appPiInit } from "./app.pihanga"
+import type { AppState } from "./app.state"
+
+const initState: AppState = {
+  ...DEFAULT_REDUX_STATE,  // required — seeds routing and framework slices
+  count: 0,
+}
+
+start(initState, [appPiInit])
+```
+
+`start()` creates the Redux store, runs each init function, and mounts the React tree. `DEFAULT_REDUX_STATE` must always be spread in.
+
+### `src/app.pihanga.ts`
+
+```ts
+import { registerFramework, registerCard } from "@pihanga2/core"
+import { Framework }  from "./cards/frame.card"
+import { Stack }      from "./cards/stack.card"
+import { Button }     from "./cards/button.card"
+import { Typography } from "./cards/typography.card"
+import type { AppState } from "./app.state"
+
+export function appPiInit(): void {
+  // The framework card wraps the whole page — only one is ever registered
+  registerFramework(Framework({ page: "page", theme: "light" }))
+
+  registerCard(
+    "page",
+    Stack<AppState>({
+      content: [
+        Button<AppState>({
+          label: "+",
+          // Event handler runs as a Redux reducer — Immer mutation, no return needed
+          onClicked: (state) => { state.count += 1 },
+        }),
+        Typography<AppState>({
+          // State mapper — re-evaluated whenever Redux state changes
+          text: (s) => `Count: ${s.count}`,
+        }),
+        Button<AppState>({
+          label: "-",
+          onClicked: (state) => { state.count -= 1 },
+        }),
+      ],
+    }),
+  )
+}
+```
+
+Notice that `Button` and `Typography` are passed **inline** as elements of `content`. A `PiCardRef` can be either a named string (looked up in the registry at render time) or an inline card definition object — both are valid anywhere a slot is expected.
+
+### `src/cards/button.card.tsx` — writing a custom card
+
+```tsx
+import {
+  type PiCardProps,
+  actionTypesToEvents,
+  createCardDeclaration,
+  registerActions,
+  registerCardComponent,
+} from "@pihanga2/core"
+
+const CARD_TYPE = "button"
+
+type ButtonProps  = { label: string }
+type ButtonEvents = { onClicked: { id?: string } }
+
+// Factory function — Button({ label: "+", onClicked: ... })
+export const Button = createCardDeclaration<ButtonProps, ButtonEvents>(CARD_TYPE)
+
+// Redux action types that correspond to this card's events
+const BUTTON_ACTIONS = registerActions(CARD_TYPE, ["clicked"])
+
+const Component = ({ label, onClicked, cardName }: PiCardProps<ButtonProps, ButtonEvents>) => (
+  <button data-pihanga={cardName} onClick={() => onClicked({})}>
+    {label}
+  </button>
+)
+
+// Called at module load time — safe because registrations are buffered until start() runs
+registerCardComponent({
+  name: CARD_TYPE,
+  component: Component,
+  events: actionTypesToEvents(BUTTON_ACTIONS),
+})
+```
+
+---
+
+## Full application structure
+
+Larger apps add routing, auth, and feature modules, but the structure is just an expansion of the minimal pattern:
+
+```
+src/
+├── index.ts / main.ts     → start(initState, inits)
+├── app.types.ts           → AppState = ReduxState & ...your slices
+├── app.pihanga.ts         → top-level layout wired to Redux state
+├── app.reducer.ts         → cross-cutting reducers (auth, default routing)
+├── login.pihanga.ts       → feature module: login page
+├── collections.pihanga.ts → feature module: collection list
+└── cards/                 → custom card components (if needed)
+    └── myCard/
+        ├── index.ts
+        ├── myCard.types.ts
+        └── myCard.component.tsx
+```
+
+The data and control flow looks like this:
+
+```mermaid
+flowchart TD
+    A["index.ts\nstart(initState, inits)"] --> B["Redux Store"]
+    A --> C["init functions\n(app.pihanga, feature modules, ...)"]
+    C --> D["registerCard() / register.card()\nregisterFramework() / register.window()"]
+    D --> E["Card Registry"]
+    B --> F["State → Card Props\n(state mappers / memo)"]
+    F --> E
+    E --> G["React Tree\n&lt;Card cardName='...' /&gt;"]
+    G --> H["User Events\n(onClicked, onSubmit, ...)"]
+    H --> B
+```
+
+---
+
+## Entry point — `index.ts`
+
+For apps that use multiple card libraries and feature modules, `start()` receives an ordered array of init functions. Each init function can either receive a `PiRegister` handle or use the standalone top-level registration functions.
+
+```ts title="src/index.ts"
+import { start, DEFAULT_REDUX_STATE } from "@pihanga2/core"
+import { init as pihangaInit }  from "./app.pihanga"
+import { reducerInit }          from "./app.reducer"
+import { init as cardLibInit }  from "@pihanga2/shadcn"   // pre-built card library
+import { AppState } from "./app.types"
+
+const initState: AppState = {
+  activePage: "app/home",
+  ...DEFAULT_REDUX_STATE,
+}
+
+start(initState, [
+  cardLibInit,    // 1. register components from external libraries first
+  pihangaInit,    // 2. then register card instances for this app
+  reducerInit,    // 3. cross-cutting reducers last
+])
+```
+
+**Rules:**
+
+- `DEFAULT_REDUX_STATE` must be spread in — it seeds the routing slice and other framework defaults.
+- Register card *components* before registering card *instances* that use those types.
+- `start()` must be called exactly once.
+
+---
+
+## Application state — `app.types.ts`
+
+The Redux store is typed through a single `AppState` that composes `ReduxState` with feature slices:
+
+```ts title="src/app.types.ts"
+import type { PiCardRef, ReduxState } from "@pihanga2/core"
+
+export type AppState = ReduxState
+  & { activePage: PiCardRef }          // which page card is showing
+  & { user?: { name: string } }        // auth slice
+  & { collections?: Collection[] }     // domain data
+
+// Named card IDs — avoids magic strings
+export enum AppCard {
+  Login = "app/login",
+  Main  = "app/main",
+}
+```
+
+!!! tip "`PiCardRef` for `activePage`"
+    `PiCardRef` is either a card-name string or an inline card definition object. Storing the active page as a `PiCardRef` in state lets any reducer switch pages by updating a single field, and card props can read it directly as a slot value.
+
+---
+
+## Top-level layout — `app.pihanga.ts`
+
+This is where the *structure* of your UI is declared as a function of state. Two registration styles are equivalent — choose whichever suits the file:
+
+| Style | Functions |
+|---|---|
+| **Standalone** (no `PiRegister` arg) | `registerFramework()`, `registerCard()`, `registerCardComponent()` |
+| **PiRegister** (init receives a handle) | `register.window()`, `register.card()`, `register.cardComponent()` |
+
+```ts title="src/app.pihanga.ts"
+import { memo, type PiRegister } from "@pihanga2/core"
+import { AppCard, AppState } from "./app.types"
+import registerLoginPage from "./login.pihanga"
+import { registerCollectionList } from "./collections.pihanga"
+
+export function init(register: PiRegister): void {
+  // Delegate feature pages to their own modules
+  registerLoginPage(register)
+  registerCollectionList(register)
+
+  // Top-level window: show login when unauthenticated, main shell otherwise
+  register.window<AppState>({
+    page: (s) => (s.user ? AppCard.Main : AppCard.Login),
+  })
+
+  // Main shell card
+  register.card(
+    AppCard.Main,
+    NavBarLayout<AppState>({
+      title: "My Application",                  // static prop
+
+      username: (s) => s.user?.name,            // state mapper
+
+      navItems: memo(                            // memoized derived value
+        (s) => s.user,
+        (user) => buildNavItems(user),
+      ),
+
+      content: (s) => s.activePage,             // nested card by name
+
+      // Inline event handler — runs as a Redux reducer
+      onLogout: (state, _event, dispatch) => {
+        delete state.user
+        return state
+      },
+    }),
+  )
+}
+```
+
+### State mappers vs `memo()`
+
+| Pattern | When to use |
+|---|---|
+| Static value `title: "My App"` | Prop never changes |
+| State mapper `(s) => s.foo` | Simple, cheap read from state |
+| `memo(selector, transform)` | Derived object/array — transform runs only when the selected slice changes |
+
+### Inline event handlers
+
+Event handlers are attached directly to the card definition. They run inside the Redux reducer (via Immer), so both mutation and returning a new state are valid:
+
+```ts
+onClicked: (state, _event, dispatch) => {
+  state.count += 1       // Immer mutation — return is optional
+},
+
+// or with dispatch:
+onLogout: (state, _event, dispatch) => {
+  delete state.user
+  dispatch({ type: "CLEAR_CACHE" })
+  return state
+},
+```
+
+---
+
+## Feature modules — `collections.pihanga.ts`
+
+Large applications split their cards into feature-level files. Each exports a registration function that accepts `PiRegister`:
+
+```ts title="src/collections.pihanga.ts"
+import { memo, onShowPage, showPage, type PiRegister } from "@pihanga2/core"
+import { Stack, List } from "@pihanga2/shadcn"
+import { AppState } from "./app.types"
+
+export enum CollectionCard {
+  Page = "app/collections/page",
+  List = "app/collections/list",
+}
+
+export function registerCollectionList(register: PiRegister): void {
+  register.card(
+    CollectionCard.Page,
+    Stack<AppState>({
+      content: [CollectionCard.List],  // child referenced by name
+      spacing: 2,
+    }),
+  )
+
+  register.card(
+    CollectionCard.List,
+    List<AppState>({
+      items: memo(
+        (s) => s.collections,
+        (cols) => (cols ?? []).map(({ id, name }) => ({ id, title: name })),
+      ),
+      onItemClicked: (s, { itemID }, d) => showPage(d, ["collections", itemID]),
+    }),
+  )
+
+  // Switch the active page when the route matches /collections
+  onShowPage<AppState>(register, (state, _action, dispatch) => {
+    if (state.route.path[0] === "collections" && state.route.path.length === 1) {
+      state.activePage = CollectionCard.Page
+    }
+  })
+}
+```
+
+---
+
+## Cross-cutting reducers — `app.reducer.ts`
+
+Auth state, default routing, and other app-wide concerns go in a dedicated reducer file:
+
+```ts title="src/app.reducer.ts"
+import { PiRegister, onShowPage, showPage } from "@pihanga2/core"
+import { AppState } from "./app.types"
+
+export function reducerInit(register: PiRegister): void {
+  // Default route: redirect "/" to "/collections"
+  onShowPage<AppState>(register, (state, _action, dispatch) => {
+    if (state.route.path.length === 0) {
+      showPage(dispatch, ["collections"])
+    }
+  })
+}
+```
+
+---
+
+## Custom card components
+
+!!! tip "Check pihanga-shadcn first"
+    Before writing a card from scratch, check the **[pihanga-shadcn catalogue](https://ivcap-works.github.io/pihanga-shadcn/)** for an existing card that fits your needs. The catalogue also contains comprehensive, production-quality examples of well-structured card definitions that are worth studying even if you end up writing your own.
+
+When the pre-built card library doesn't have what you need, create your own card in three files:
+
+```ts title="src/cards/statusBadge/statusBadge.types.ts"
+import { createCardDeclaration, actionTypesToEvents } from "@pihanga2/core"
+
+export const STATUS_BADGE = "app/statusBadge"
+
+export type StatusBadgeProps  = { label: string; status: "ok" | "warn" | "error" }
+export type StatusBadgeEvents = { onDismiss: Record<string, never> }
+
+export const StatusBadge         = createCardDeclaration<StatusBadgeProps, StatusBadgeEvents>(STATUS_BADGE)
+export const STATUS_BADGE_ACTIONS = actionTypesToEvents<StatusBadgeEvents>(STATUS_BADGE)
+```
+
+```tsx title="src/cards/statusBadge/statusBadge.component.tsx"
+import { PiCardProps } from "@pihanga2/core"
+
+const colours = { ok: "green", warn: "orange", error: "red" } as const
+
+export function StatusBadgeComponent({
+  label, status, onDismiss,
+}: PiCardProps<StatusBadgeProps, StatusBadgeEvents>) {
+  return (
+    <span style={{ color: colours[status] }}>
+      {label}
+      <button onClick={() => onDismiss({})}>×</button>
+    </span>
+  )
+}
+```
+
+```ts title="src/cards/statusBadge/index.ts"
+import { registerCardComponent } from "@pihanga2/core"
+import { STATUS_BADGE, STATUS_BADGE_ACTIONS } from "./statusBadge.types"
+import { StatusBadgeComponent } from "./statusBadge.component"
+
+export { StatusBadge } from "./statusBadge.types"
+
+export function init(register: import("@pihanga2/core").PiRegister) {
+  register.cardComponent({
+    name: STATUS_BADGE,
+    component: StatusBadgeComponent,
+    events: STATUS_BADGE_ACTIONS,
+  })
+}
+```
+
+Use it in any `.pihanga.ts` file:
+
+```ts
+import { StatusBadge } from "./cards/statusBadge"
+
+register.card(
+  "app/header/status",
+  StatusBadge<AppState>({
+    label: (s) => s.serviceStatus.message,
+    status: (s) => s.serviceStatus.level,
+    onDismiss: (state) => {
+      delete state.serviceStatus
+      return state
+    },
+  }),
+)
+```
+
+---
+
+## Pre-built card libraries
+
+Rather than building every card from scratch, use the published card libraries:
+
+| Library | Description |
+|---|---|
+| [`@pihanga2/shadcn`](https://ivcap-works.github.io/pihanga-shadcn/) | General-purpose cards: `Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`, `ImageViewer`, `FileDrop`, … |
+| `@pihanga2/joy-ui` | MUI Joy-based layout cards: `JyPage3` (nav-bar shell), `JyLogin`, … |
+
+Browse the full card catalogue and their prop interfaces at **[https://ivcap-works.github.io/pihanga-shadcn/](https://ivcap-works.github.io/pihanga-shadcn/)**.
+
+---
+
+## Summary
+
+| File | Responsibility |
+|---|---|
+| `main.ts` / `index.ts` | Call `start()` with initial state and ordered init functions |
+| `app.state.ts` / `app.types.ts` | Compose `AppState` from `ReduxState` + feature slices |
+| `app.pihanga.ts` | Top-level `registerFramework()` / `register.window()`; main shell card |
+| `*.pihanga.ts` | Feature-level card registrations + `onShowPage` routing |
+| `app.reducer.ts` | Cross-cutting reducers: auth, default routing |
+| `cards/*/index.ts` | Custom card components via `registerCardComponent()` |
+
+The guiding principle is **declarative layout**: each `registerCard()` call is a *description* of what a card looks like as a function of state. Pihanga subscribes to the Redux store, re-evaluates state mappers on every change, and re-renders only the affected cards — with no manual wiring.
+
+
+## Cards
+
+# Cards Guide
+
+A **card** is the fundamental UI unit in Pihanga. It combines a React component with a typed prop/event interface and a name in the global card registry.
+
+!!! tip "Check the card library first"
+    Before writing a card from scratch, browse the **[pihanga-shadcn card catalogue](https://ivcap-works.github.io/pihanga-shadcn/)**.
+    It ships ready-made cards (`Button`, `Stack`, `List`, `Table`, `Form`, `Input`, `Typography`,
+    `ImageViewer`, `FileDrop`, …) and contains more comprehensive examples of how to define
+    well-structured, maintainable cards.
+
+## Anatomy of a card
+
+Every card has two parts:
+
+1. **A card type declaration** — defines the TypeScript types and creates a factory function
+2. **A card component** — the React component that renders it
+
+### Step 1 — Declare the card type
+
+```ts title="src/cards/counter/counter.types.ts"
+import { createCardDeclaration, actionTypesToEvents } from "@pihanga2/core";
+
+export const COUNTER_CARD = "my/counter";
+
+export type CounterProps = {
+  count: number;
+  label?: string;
+};
+
+export type CounterEvents = {
+  onIncrement: { delta: number };
+  onReset: Record<string, never>;
+};
+
+// Factory function: CounterCard({ count: 0, label: "Hits" })
+export const CounterCard = createCardDeclaration<CounterProps, CounterEvents>(
+  COUNTER_CARD,
+);
+
+// Redux action types that map to CounterEvents
+export const COUNTER_ACTIONS = actionTypesToEvents<CounterEvents>(COUNTER_CARD);
+```
+
+### Step 2 — Write the React component
+
+```tsx title="src/cards/counter/counter.component.tsx"
+import React from "react";
+import { PiCardProps } from "@pihanga2/core";
+import { CounterProps, CounterEvents } from "./counter.types";
+
+export function CounterComponent({
+  count,
+  label = "Count",
+  onIncrement,
+  onReset,
+}: PiCardProps<CounterProps, CounterEvents>) {
+  return (
+    <div>
+      <span>{label}: {count}</span>
+      <button onClick={() => onIncrement({ delta: 1 })}>+1</button>
+      <button onClick={() => onReset({})}>Reset</button>
+    </div>
+  );
+}
+```
+
+### Step 3 — Register the component
+
+```ts title="src/cards/counter/index.ts"
+import { registerCardComponent } from "@pihanga2/core";
+import { COUNTER_CARD, COUNTER_ACTIONS } from "./counter.types";
+import { CounterComponent } from "./counter.component";
+
+registerCardComponent({
+  name: COUNTER_CARD,
+  component: CounterComponent,
+  events: COUNTER_ACTIONS,
+});
+```
+
+### Step 4 — Register a card instance
+
+```ts title="src/app.pihanga.ts"
+import { register } from "@pihanga2/core";
+import { CounterCard } from "./cards/counter/counter.types";
+
+register((r) => {
+  r.card("page/myCounter", CounterCard({ count: 0, label: "Clicks" }));
+});
+```
+
+## Card props vs events
+
+| Concept | TypeScript type | Description |
+|---|---|---|
+| **Props** | `MyCardProps` | Static configuration passed from parent card or state |
+| **Events** | `MyCardEvents` | User interactions dispatched as Redux actions |
+| `PiCardProps<P, E>` | Combined | Type for the component function signature |
+
+## Rendering a card by name
+
+Use the `<Card>` component anywhere inside a Pihanga app:
+
+```tsx
+import { Card } from "@pihanga2/core";
+
+function ParentComponent() {
+  return <Card name="page/myCounter" />;
+}
+```
+
+The card name is looked up in the global registry at render time.
+
+## Common pitfalls
+
+!!! warning "Import order"
+    `registerCardComponent()` must be called **before** `start()` renders the component tree.
+    Ensure your card modules are imported before `start()` is invoked.
+
+!!! warning "Unknown card type"
+    If you see a console error like `"unknown card type: my/counter"`, the `registerCardComponent`
+    call for that card type has not been executed yet. Check your module imports.
+
+
+## Redux & Reducers
+
+# Redux & Reducers Guide
+
+Pihanga wraps Redux Toolkit. State updates happen in **reducers** — pure functions that receive
+the current state and an action and return a new (or Immer-mutated) state. There are three ways
+to register reducers in Pihanga.
+
+---
+
+## Immer recipe contract — always mutate, never spread
+
+!!! warning "Critical: Pihanga reducers are Immer recipes"
+    Every reducer in Pihanga (`ReduceF`, `EventHandler`, inline `onXxx` handlers) receives
+    an **[Immer](https://immerjs.github.io/immer/) draft proxy** as the `state` argument.
+
+    **Mutate the draft in place. Do not return a spread copy.**
+
+    ```ts
+    // ✅ Correct — mutate the draft directly
+    onIncrement: (state, { delta }) => {
+      state.count += delta;
+      // no return needed
+    },
+
+    // ❌ Wrong — spread creates a plain object; the return value
+    //            is silently discarded by the Immer runtime anyway
+    onIncrement: (state, { delta }) => {
+      return { ...state, count: state.count + delta };
+    },
+    ```
+
+    **TypeScript will NOT warn you about this.**
+    TypeScript's `void` return type for *callback expressions* is intentionally permissive:
+    assigning an arrow function that returns a value to a `void`-typed variable compiles
+    without error — this is documented [TypeScript design behaviour][ts-void].
+    There is no compile-time or runtime exception; Immer simply discards the returned
+    plain object and your state change is **silently lost**.
+
+    The only safeguard is to never use `return { ...state }` in a Pihanga reducer.
+
+    [ts-void]: https://www.typescriptlang.org/docs/handbook/2/functions.html#void
+
+    If you need to read the original (non-draft) state, use `opts.rawState` —
+    the fourth argument passed to every `ReduceF`.
+
+---
+
+## 1. Inline event handlers (most common)
+
+The simplest way to react to user events is to attach a reducer directly to the card declaration.
+These inline handlers run inside Redux (via Immer), so both mutation and returning a new state work:
+
+```ts title="src/app.pihanga.ts"
+register.card(
+  "page/counter",
+  CounterCard<AppState>({
+    count: (s) => s.count,
+
+    onIncrement: (state, { delta }) => {
+      state.count += delta;          // Immer mutation — no return needed
+    },
+
+    onReset: (state, _event, dispatch) => {
+      state.count = 0;
+      dispatch({ type: "COUNTER_RESET" });  // optional side-effect
+      return state;
+    },
+  }),
+)
+```
+
+---
+
+## 2. Module-level reducers — `register.reducer` / `createOnAction`
+
+For cross-cutting logic (auth, routing, analytics), register reducers in an init function.
+
+### Using `register.reducer.register`
+
+```ts title="src/app.reducer.ts"
+import { type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function reducerInit(register: PiRegister): void {
+  register.reducer.register<AppState>(
+    "COUNTER/INCREMENT",
+    (state, action) => {
+      state.count += action.delta;
+      return state;
+    },
+  );
+}
+```
+
+### Using `createOnAction`
+
+`createOnAction("ACTION_TYPE")` **returns a registration function** — you must call it with a
+`PiRegister` to actually register the reducer:
+
+```ts title="src/feature.pihanga.ts"
+import { createOnAction, type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+// Step 1 — create the registration helper (once, at module level)
+const onCounterIncrement = createOnAction<{ delta: number }>("COUNTER/INCREMENT");
+
+// Step 2 — register it inside an init function
+export function init(register: PiRegister): void {
+  onCounterIncrement<AppState>(register, (state, action) => {
+    state.count += action.delta;
+    return state;
+  });
+}
+```
+
+!!! warning "Common mistake"
+    `createOnAction` is **not** a direct registration call. It creates a *helper function*
+    for a specific action type. You must invoke the returned function with a `PiRegister`:
+
+    ```ts
+    // ❌ Wrong — createOnAction takes only one argument
+    createOnAction<AppState>("COUNTER/INCREMENT", (state) => state);
+
+    // ✅ Correct — call the returned function with (register, handler)
+    const onIncrement = createOnAction<IncrEvent>("COUNTER/INCREMENT");
+    onIncrement<AppState>(register, (state, action) => { ... });
+    ```
+
+---
+
+## 3. Inside a component — `usePiReducer`
+
+Use the `usePiReducer` hook to react to Redux actions from within a card component.
+The reducer is automatically unregistered when the component unmounts:
+
+```tsx title="src/cards/counter/counter.component.tsx"
+import { usePiReducer, type PiCardProps } from "@pihanga2/core";
+import { COUNTER_ACTIONS, type CounterProps, type CounterEvents } from "./counter.types";
+
+function CounterComponent(props: PiCardProps<CounterProps, CounterEvents>) {
+  usePiReducer<AppState>(
+    [COUNTER_ACTIONS.INCREMENT],
+    (state, action) => {
+      state.count += action.delta;
+      return state;
+    },
+  );
+
+  return <div>{props.count}</div>;
+}
+```
+
+---
+
+## Reducer priorities
+
+Multiple reducers registered for the same action type run in **descending priority order**
+(higher number = called first). The default priority is `0`:
+
+```ts
+register.reducer.register("MY_ACTION", firstHandler,  10);  // called first
+register.reducer.register("MY_ACTION", secondHandler,  0);  // called second (default)
+register.reducer.register("MY_ACTION", thirdHandler,  -5);  // called last
+```
+
+---
+
+## One-shot reducers
+
+A one-shot reducer runs exactly once, then unregisters itself:
+
+```ts
+register.reducer.registerOneShot<AppState>(
+  "INIT_DONE",
+  (state) => {
+    state.ready = true;
+    return state;
+  },
+);
+```
+
+---
+
+## `dispatchPipe` — request/reply pattern
+
+`dispatchPipe` (available in `ReduceOpts`) wraps async Redux round-trips with automatic
+timeout and cleanup:
+
+```ts
+onButtonClicked: (state, _event, dispatch, opts) => {
+  opts.dispatchPipe(
+    { type: "FETCH_USER", userId: "123" },        // request action
+    { replyType: "FETCH_USER_REPLY", timeoutMs: 5000 },
+    (state, reply)   => { state.user = reply.user; return state; },  // success
+    (state, error)   => { state.error = error.message; return state; },  // error
+    (state, timeout) => { state.status = "timeout"; return state; },  // timeout
+  );
+  return state;
+},
+```
+
+
+## Routing
+
+# Routing Guide
+
+Pihanga uses the [`history`](https://github.com/remix-run/history) library for browser-based
+routing. Routes are stored in `state.route` as a Redux state slice and updated via dispatched actions.
+
+---
+
+## Navigate to a page — `showPage`
+
+`showPage` dispatches a navigation action. It takes a **dispatch function** and a **path array**:
+
+```ts
+import { showPage } from "@pihanga2/core";
+
+// Inside a card event handler or inline reducer:
+onItemClicked: (state, { itemID }, dispatch) => {
+  showPage(dispatch, ["items", itemID]);
+  return state;
+},
+```
+
+An optional third argument is a query-parameter map:
+
+```ts
+showPage(dispatch, ["dashboard"], { tab: "overview" });
+// navigates to: /dashboard?tab=overview
+```
+
+!!! note "Path as an array"
+    The path is always a `string[]` of URL segments — `"/items/42"` is represented as
+    `["items", "42"]`. This makes pattern matching in handlers simpler and avoids manual
+    string parsing.
+
+---
+
+## React to a route change — `onShowPage`
+
+`onShowPage` registers a reducer that fires whenever a `SHOW_PAGE` action is dispatched
+(i.e. on every programmatic or browser navigation). It receives the full Redux state and the
+route action, and must return the (possibly mutated) state.
+
+```ts
+import { onShowPage, type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function init(register: PiRegister): void {
+  onShowPage<AppState>(register, (state, action, dispatch) => {
+    // action.path  — string[] of URL segments
+    // action.query — parsed query parameters
+    switch (state.route.path[0]) {
+      case "items":
+        state.activePage = "page/items";
+        break;
+      case "settings":
+        state.activePage = "page/settings";
+        break;
+      default:
+        // redirect bare root to items
+        if (state.route.path.length === 0) {
+          showPage(dispatch, ["items"]);
+        }
+    }
+    return state;
+  });
+}
+```
+
+You can register multiple `onShowPage` handlers — they all run in registration order.
+
+---
+
+## Initialisation hook — `onInit`
+
+`onInit` fires exactly once when the application first starts (before the first navigation):
+
+```ts
+import { onInit, type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function init(register: PiRegister): void {
+  onInit<AppState>(register, (state, _action, dispatch) => {
+    dispatch({ type: "APP_INIT" });
+    return state;
+  });
+}
+```
+
+---
+
+## Every navigation — `onNavigateToPage`
+
+`onNavigateToPage` fires on **every** navigation event (any path), including browser back/forward.
+It receives a `{ url: string; fromBrowser: boolean }` action:
+
+```ts
+import { onNavigateToPage, type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function init(register: PiRegister): void {
+  onNavigateToPage<AppState>(register, (state, action, _dispatch) => {
+    console.log("Navigated to:", action.url, "fromBrowser:", action.fromBrowser);
+    return state;
+  });
+}
+```
+
+---
+
+## The `Route` object
+
+The current route is stored at **`state.route`** (not `state.pihanga.route`):
+
+```ts
+type Route = {
+  path: string[];                                   // URL segments: "/items/42" → ["items", "42"]
+  query: Record<string, string | boolean | number>; // parsed query params
+  url: string;                                      // full path + query string
+  fromBrowser?: boolean;                            // true when triggered by browser back/forward
+};
+```
+
+You can read it from any state mapper or reducer:
+
+```ts
+register.card("page/nav", NavBar<AppState>({
+  currentSection: (s) => s.route.path[0] ?? "home",
+}));
+```
+
+---
+
+## Typical routing pattern
+
+The most common pattern stores the active page card name in state and updates it in
+`onShowPage`. The framework/window card then reads it as its `page` prop:
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant R as Router
+    participant S as Redux Store
+    participant C as Card Tree
+
+    B->>R: URL change (or showPage call)
+    R->>S: dispatch SHOW_PAGE {path, query}
+    S->>S: onShowPage handlers update state.activePage
+    S->>C: re-render with new state
+    C->>B: updated UI
+```
+
+```ts title="src/app.types.ts"
+export type AppState = ReduxState & {
+  activePage: PiCardRef;
+}
+```
+
+```ts title="src/app.pihanga.ts"
+// Window card — driven by state.activePage
+register.window<AppState>({
+  page: (s) => s.activePage,
+});
+```
+
+```ts title="src/app.reducer.ts"
+// Route handler — maps URL segments to card names
+onShowPage<AppState>(register, (state, _action, dispatch) => {
+  switch (state.route.path[0]) {
+    case "collections": state.activePage = "app/collections/page"; break;
+    case "settings":    state.activePage = "app/settings/page";    break;
+    default:
+      if (state.route.path.length === 0) {
+        showPage(dispatch, ["collections"]);  // default route
+      }
+  }
+  return state;
+});
+```
+
+
+## REST API
+
+# REST API Guide
+
+`@pihanga2/core` provides typed REST helpers that integrate fetch calls with the Redux action lifecycle.
+
+## Registration
+
+All REST handlers are registered inside a `register()` callback:
+
+```ts
+import { register } from "@pihanga2/core";
+
+register((r) => {
+  r.GET<AppState, FetchItemsAction, Item[]>({
+    name: "fetchItems",
+    trigger: "FETCH_ITEMS",
+    url: "/api/items",
+    reply: (state, items, dispatch) => {
+      dispatch({ type: "ITEMS_LOADED", items });
+    },
+    error: (state, err, req, dispatch) => {
+      dispatch({ type: "FETCH_FAILED", message: err.message });
+    },
+  });
+});
+```
+
+## Supported methods
+
+| Method | Registers |
+|---|---|
+| `r.GET(props)` | HTTP GET handler |
+| `r.POST(props)` | HTTP POST handler |
+| `r.PUT(props)` | HTTP PUT handler |
+| `r.PATCH(props)` | HTTP PATCH handler |
+| `r.DELETE(props)` | HTTP DELETE handler |
+
+## URL parameters
+
+Use `:param` placeholders in the URL — they are interpolated from the triggering action:
+
+```ts
+r.GET({
+  trigger: "FETCH_ITEM",
+  url: "/api/items/:itemId",   // action.itemId fills :itemId
+  reply: (state, item, dispatch) => { ... },
+});
+```
+
+## Request context
+
+The optional `context` function computes per-request data (e.g. auth tokens) from state:
+
+```ts
+r.GET({
+  trigger: "FETCH_SECURE",
+  url: "/api/secure",
+  context: async (action, state) => ({
+    token: state.auth.accessToken,
+  }),
+  headers: (action, state, ctx) => ({
+    Authorization: `Bearer ${ctx.token}`,
+  }),
+  reply: (state, data, dispatch) => { ... },
+});
+```
+
+!!! warning "Context errors"
+    If `context` throws, the request is aborted and the `error` handler is called.
+
+## Full documentation
+
+See [REST Usage Reference](rest-usage.md) for the complete API reference,
+including `body`, `contentType`, `query`, and error handling options.
+
+
+## REST Full Reference
+
+# REST Usage (PiRegister.{GET|POST|PUT|PATCH|DELETE})
+
+This document is split into two parts:
+
+* **Usage (what most library users need day-to-day)**
+* **Debugging / internals (useful when something goes wrong)**
+
+## Table of contents
+
+* [Usage](#usage)
+  * [Mental model](#mental-model)
+  * [Common registration properties](#common-registration-properties)
+  * [URL templates and bindings](#url-templates-and-bindings)
+  * [Usage: GET (start here)](#usage-get-start-here)
+    * [Minimal typed GET example (no auth/context)](#minimal-typed-get-example-no-authcontext)
+    * [Advanced GET example (auth via context + origin + headers)](#advanced-get-example-auth-via-context--origin--headers)
+  * [Usage: Request context + auth (common pattern)](#usage-request-context--auth-common-pattern)
+  * [Usage: Progress (submitted/result/error) actions](#usage-progress-submittedresulterror-actions)
+  * [Usage: POST / PUT / PATCH (request bodies)](#usage-post--put--patch-request-bodies)
+    * [Common request body shape](#common-request-body-shape)
+    * [POST](#post)
+    * [PUT](#put)
+    * [PATCH](#patch)
+  * [Usage: DELETE](#usage-delete)
+  * [Usage: Error handling](#usage-error-handling)
+* [Debugging / internals](#debugging--internals)
+  * [Where the code lives](#where-the-code-lives)
+  * [How it hooks into Redux](#how-it-hooks-into-redux)
+  * [Internal action types](#internal-action-types)
+  * [Response parsing](#response-parsing)
+  * [Notes / gotchas](#notes--gotchas)
+
+## Usage
+
+### Mental model
+
+1. You register a REST handler, e.g. `register.GET({ ... })`.
+2. It **listens** for a Redux action type (`trigger`).
+3. When that action is dispatched, it builds a URL from your `url` template plus bindings from `request(...)`, optionally loads `context(...)` and applies `headers(...)`, then calls `fetch`.
+4. On success, your `reply(...)` runs and typically dispatches your domain actions.
+
+### Common registration properties
+
+All verbs share the properties from `RegisterGenericProps` (`src/rest/types.ts`):
+
+| property | type | purpose |
+| --- | --- | --- |
+| `name` | `string` | Logical call name (used for internal bookkeeping/debugging). |
+| `trigger` | `string` | Redux action type that starts the call. |
+| `url` | `string` | URL template supporting bindings like `:id` and optional bindings like `?page`. |
+| `origin?` | `string \| (action, state, ctxt) => string \| URL` | Base origin. Default is `window.location.href`. |
+| `context?` | `(action, state) => Promise<C> \| null` | Async context (e.g. auth token, base URL). |
+| `guard?` | `(action, state, dispatch, ctxt) => boolean` | Return `false` to skip the request. |
+| `headers?` | `(action, state, ctxt) => Record<string,string>` | Request headers (auth, correlation IDs, etc.). |
+| `reply` | `(state, content, dispatch, resultAction) => void` | Called on success (HTTP < 300). Dispatch domain actions here. |
+| `error?` | `(state, errorAction, requestAction, dispatch) => S` | Called on non-2xx responses. Dispatch domain error actions here. |
+
+### URL templates and bindings
+
+Bindings are substituted into the `url` **path segments** and **query string**:
+
+* `:name` = required binding. Missing it triggers an internal error.
+* `?name` = optional binding. Missing it omits that query parameter.
+
+Examples:
+
+* `/1/artifacts/:id` requires `{ id: "..." }`
+* `/1/orders?limit=?limit&page=?page` omits `limit` and/or `page` if not provided
+
+Path bindings are URL-encoded.
+
+## Usage: GET (start here)
+
+GET registrations provide optional `request(...)` bindings (no request body).
+
+### Minimal typed GET example (no auth/context)
+
+```ts
+import type {
+  Bindings,
+  DispatchF,
+  ErrorAction,
+  PiRegister,
+  ResultAction,
+  ReduxAction,
+  ReduxState,
+  register,
+} from "@pihanga2/core"
+
+type MyState = ReduxState & {}
+
+type LoadThingAction = ReduxAction & {
+  id: string
+}
+
+type Thing = {
+  id: string
+  name: string
+}
+
+register((r: PiRegister) => {
+  r.GET<MyState, LoadThingAction, Thing>({
+    name: "loadThing",
+    trigger: "THING/LOAD",
+    url: "/v1/things/:id",
+
+    request: (action: LoadThingAction, _state: MyState): Bindings => ({
+      id: action.id,
+    }),
+
+    reply: (
+      _state: MyState,
+      content: Thing,
+      dispatch: DispatchF,
+      _result: ResultAction<LoadThingAction>,
+    ): void => {
+      dispatch({ type: "THING/LOADED", thing: content })
+    },
+
+    error: (
+      state: MyState,
+      err: ErrorAction<LoadThingAction>,
+      _requestAction: LoadThingAction,
+      dispatch: DispatchF,
+    ): MyState => {
+      dispatch({ type: "THING/LOAD_FAILED", cause: err })
+      return state
+    },
+  })
+})
+```
+
+### Advanced GET example (auth via context + origin + headers)
+
+```ts
+import type {
+  Bindings,
+  DispatchF,
+  ErrorAction,
+  PiRegister,
+  ResultAction,
+  ReduxAction,
+  ReduxState,
+  register,
+} from "@pihanga2/core"
+
+type MyState = ReduxState
+
+type LoadThingAction = ReduxAction & {
+  id: string
+}
+
+type Thing = {
+  id: string
+  name: string
+}
+
+type MyAuthContext = {
+  apiOrigin: string
+  token: string
+}
+
+register((r: PiRegister) => {
+  r.GET<MyState, LoadThingAction, Thing, MyAuthContext>({
+    name: "loadThing",
+    trigger: "THING/LOAD",
+    url: "/v1/things/:id",
+
+    context: async (
+      _action: LoadThingAction,
+      _state: MyState,
+    ): Promise<MyAuthContext> => ({
+      apiOrigin: "https://api.example.com",
+      token: "...",
+    }),
+
+    origin: (
+      _action: LoadThingAction,
+      _state: MyState,
+      ctxt: MyAuthContext,
+    ): string => ctxt.apiOrigin,
+
+    headers: (
+      _action: LoadThingAction,
+      _state: MyState,
+      ctxt: MyAuthContext,
+    ): Record<string, string> => ({
+      Authorization: `Bearer ${ctxt.token}`,
+    }),
+
+    request: (action: LoadThingAction, _state: MyState): Bindings => ({
+      id: action.id,
+    }),
+
+    reply: (
+      _state: MyState,
+      content: Thing,
+      dispatch: DispatchF,
+      _result: ResultAction<LoadThingAction>,
+    ): void => {
+      dispatch({ type: "THING/LOADED", thing: content })
+    },
+
+    error: (
+      state: MyState,
+      err: ErrorAction<LoadThingAction>,
+      _requestAction: LoadThingAction,
+      dispatch: DispatchF,
+    ): MyState => {
+      dispatch({ type: "THING/LOAD_FAILED", cause: err })
+      return state
+    },
+  })
+})
+```
+
+## Usage: Request context + auth (common pattern)
+
+For authenticated APIs, a common pattern is:
+
+* `context()` loads auth/base-url asynchronously (token, API URL)
+* `origin()` sets the base URL from that context
+* `headers()` adds auth headers (e.g. `Authorization: Bearer ...`)
+
+A reusable helper encapsulates these shared props:
+
+```ts
+const CommonProps = (name: string) => ({
+  name,
+  context: () => GetOAuthContext(),
+  origin: (_a: any, _s: any, ctxt: OAuthContextT) => ctxt.apiURL,
+  headers: (_a: any, _s: any, ctxt: OAuthContextT) => ({
+    Authorization: `Bearer ${ctxt.token}`,
+  }),
+  error: restErrorHandling(`api:${name}`),
+})
+```
+
+## Usage: Progress (submitted/result/error) actions
+
+Every REST registration reports lifecycle/progress via **additional Redux actions**. This is useful for:
+
+* showing spinners (request submitted)
+* logging / debugging
+* building a generic request-tracker in state
+
+### Base action types (GET)
+
+GET uses the following action namespace (`src/rest/get.ts`):
+
+* `pi/rest/get/submitted`
+* `pi/rest/get/result`
+* `pi/rest/get/error`
+* `pi/rest/get/internal_error`
+
+specialised per handler by appending `/${name}`:
+
+```ts
+const submitType    = `${ACTION_TYPES.SUBMITTED}/${name}`
+const resultType    = `${ACTION_TYPES.RESULT}/${name}`
+const errorType     = `${ACTION_TYPES.ERROR}/${name}`
+const intErrorType  = `${ACTION_TYPES.INTERNAL_ERROR}/${name}`
+```
+
+### Base action types (POST/PUT/PATCH/DELETE)
+
+In `src/rest/types.ts`:
+
+```ts
+export const Domain = "pi/rest"
+export const ACTION_TYPES = registerActions(Domain, [
+  "POST_SUBMITTED", "POST_RESULT", "POST_ERROR", "POST_INTERNAL_ERROR",
+  "PUT_SUBMITTED",  "PUT_RESULT",  "PUT_ERROR",  "PUT_INTERNAL_ERROR",
+  "PATCH_SUBMITTED","PATCH_RESULT","PATCH_ERROR","PATCH_INTERNAL_ERROR",
+  "DELETE_SUBMITTED","DELETE_RESULT","DELETE_ERROR","DELETE_INTERNAL_ERROR",
+  "UNAUTHORISED_ERROR", "PERMISSION_DENIED_ERROR", "NOT_FOUND_ERROR",
+  "ERROR", "CONTEXT_ERROR",
+])
+```
+
+Specialised by appending `:${name}`, e.g. `pi/rest/POST_SUBMITTED:createOrder`.
+
+### Payload shapes
+
+* **submitted** → `SubmitAction` (includes `requestID`, `url`, `bindings`)
+* **result** → `ResultAction<A>` (includes `statusCode`, `content`, `contentType`, `mimeType`, `size`, `headers`, `url`, original `request` action)
+* **error** → `ErrorAction<A>` (similar to result, plus an `ErrorKind` classification)
+
+## Usage: POST / PUT / PATCH (request bodies)
+
+POST/PUT/PATCH all have a request body. Their `request(...)` returns:
+
+```ts
+type PoPuPaRequest = {
+  body: any
+  contentType?: string
+  bindings?: Bindings
+}
+```
+
+### POST
+
+```ts
+register((r: PiRegister) => {
+  r.POST<MyState, CreateThingAction, Thing>({
+    name: "createThing",
+    trigger: "THING/CREATE",
+    url: "/v1/things",
+    request: (action: CreateThingAction, _state: MyState) => ({
+      body: action.payload,
+      contentType: "application/json",
+    }),
+    reply: (_state: MyState, content: Thing, dispatch: DispatchF) => {
+      dispatch({ type: "THING/CREATED", thing: content })
+    },
+  })
+})
+```
+
+### PUT
+
+PUT typically replaces a resource at a known URL.
+
+```ts
+r.PUT<MyState, UpdateThingAction, Thing>({
+  name: "updateThing",
+  trigger: "THING/UPDATE",
+  url: "/v1/things/:id",
+  request: (action: UpdateThingAction, _state: MyState) => ({
+    bindings: { id: action.id },
+    body: action.payload,
+    contentType: "application/json",
+  }),
+  reply: (_state: MyState, content: Thing, dispatch: DispatchF) => {
+    dispatch({ type: "THING/UPDATED", thing: content })
+  },
+})
+```
+
+### PATCH
+
+PATCH applies a partial update.
+
+```ts
+register((r: PiRegister) => {
+  r.PATCH<MyState, PatchThingAction, Thing>({
+    name: "patchThing",
+    trigger: "THING/PATCH",
+    url: "/v1/things/:id",
+    request: (action: PatchThingAction, _state: MyState) => ({
+      bindings: { id: action.id },
+      body: action.patch,
+      contentType: "application/json",
+    }),
+    reply: (_state: MyState, content: Thing, dispatch: DispatchF) => {
+      dispatch({ type: "THING/PATCHED", thing: content })
+    },
+  })
+})
+```
+
+## Usage: DELETE
+
+DELETE is bindings-only (like GET) but uses HTTP method `DELETE`.
+
+```ts
+register((r: PiRegister) => {
+  r.DELETE<MyState, DeleteThingAction, unknown>({
+    name: "deleteThing",
+    trigger: "THING/DELETE",
+    url: "/v1/things/:id",
+    request: (action: DeleteThingAction, _state: MyState): Bindings => ({
+      id: action.id,
+    }),
+    reply: (
+      _state: MyState,
+      _content: unknown,
+      dispatch: DispatchF,
+      result: ResultAction<DeleteThingAction>,
+    ): void => {
+      dispatch({ type: "THING/DELETED", id: result.request.id })
+    },
+  })
+})
+```
+
+## Usage: Error handling
+
+On non-2xx responses, the REST module dispatches an `ErrorAction` containing:
+
+* `statusCode`
+* `content` (parsed body)
+* `error: ErrorKind` (401/403/404 mapped; else `Other`)
+* `url`
+* `request` (the original trigger action)
+
+You can attach an `error(...)` handler per call, or centralize handling. See [Usage: Request context + auth](#usage-request-context--auth-common-pattern) for a reusable strategy.
+
+## Debugging / internals
+
+### Where the code lives
+
+* `src/rest/get.ts`
+* `src/rest/postPutPatch.ts`
+* `src/rest/delete.ts`
+* shared plumbing: `src/rest/utils.ts`
+* types: `src/rest/types.ts`
+
+### How it hooks into Redux
+
+Pihanga's `PiReducer` is a small registration layer on top of Redux Toolkit's store (`src/reducer.ts`).
+
+When you call `register.GET({...})`, internally it registers reducers for:
+
+* the trigger action (`trigger`)
+* the internal success action (which calls your `reply(...)`)
+* optionally the internal error action (which calls your `error(...)`)
+
+So the REST system is effectively "middleware implemented as reducers": it reacts to actions and dispatches more actions.
+
+### Internal action types
+
+GET (`src/rest/get.ts`) creates types like:
+
+* `pi/rest/get/submitted/${name}`
+* `pi/rest/get/result/${name}`
+* `pi/rest/get/error/${name}`
+* `pi/rest/get/internal_error/${name}`
+
+POST/PUT/PATCH/DELETE create types like:
+
+* `pi/rest/post_submitted:${name}`
+* `pi/rest/put_result:${name}`
+* `pi/rest/delete_error:${name}`
+
+### Response parsing
+
+Response parsing is in `src/rest/utils.ts`:
+
+* `application/json` → `response.json()` → `RestContentType.Object`
+* `application/jose` or `text/*` → `response.text()` → `RestContentType.Text`
+* otherwise → `response.blob()` → `RestContentType.Blob`
+
+### Notes / gotchas
+
+* `reply(...)` runs in response to an internal action; keep it fast and dispatch domain actions.
+* If `context(...)` is async, don't rely on the `state` parameter inside `guard/headers/origin` when using `context` (it receives `null`).
+* Prefer `?name` bindings for optional query parameters so they get omitted cleanly.
+
+
+# API Reference
+
+## Overview
+
+# API Reference Overview
+
+All public exports are available from `@pihanga2/core`.
+
+## Core functions
+
+| Function | Description |
+|---|---|
+| [`start()`](start.md) | Bootstrap the Pihanga app — creates Redux store, mounts React |
+| [`register()`](register.md) | Buffer card/REST registrations before `start()` |
+| [`registerCard(name, def)`](register.md) | Register a named card instance (standalone helper) |
+| [`registerCardComponent(decl)`](register.md) | Register a React component for a card type |
+| [`registerFramework(def)`](register.md) | Register the top-level window/framework card |
+
+## Card helpers
+
+| Export | Description |
+|---|---|
+| `createCardDeclaration<P, E>(name)` | Create a typed card factory function |
+| `actionTypesToEvents<E>(cardName)` | Map event names → Redux action type strings |
+| `registerActions(ns, names)` | Register a set of Redux action type strings for a namespace |
+| `<Card name="..." />` | Render a registered card instance by name |
+| `usePiReducer<S>(actionTypes, reducer)` | Register a Redux reducer from inside a component (auto-cancels on unmount) |
+| `memo(selector, transform)` | Memoize a derived state value — `transform` only reruns when `selector` result changes |
+| `isCardRef(value)` | Type-guard: returns `true` if `value` is a valid `PiCardRef` |
+
+## Routing
+
+| Export | Signature | Description |
+|---|---|---|
+| `showPage` | `(dispatch, path: string[], query?) => void` | Navigate to a path |
+| `onShowPage` | `(register, handler) => void` | Register a reducer that fires on every `SHOW_PAGE` action |
+| `onInit` | `(register, handler) => void` | Register a one-time startup handler |
+| `onNavigateToPage` | `(register, handler) => void` | Register a handler for every navigation event |
+| `createShowPageAction` | `(path, query?) => ReduxAction` | Create a `SHOW_PAGE` action without dispatching |
+
+!!! note "Handler signature"
+    All routing handlers follow the standard reducer signature:
+    `(state: S, action, dispatch) => S`
+    — **not** `(action, state, dispatch)`.
+
+## Utilities
+
+| Export | Description |
+|---|---|
+| `createOnAction<E>(actionType)` | Returns a `(register, handler) => void` registration helper for the given action type |
+| `getLogger(name)` | Get a named tslog logger |
+| `cls_f(...classes)` | CSS class name helper |
+| `uuidv7()` | Generate a UUIDv7 string |
+
+!!! note "`createOnAction` usage"
+    `createOnAction(type)` takes **one** argument and **returns** a registration function.
+    Call the result with `(register, handler)` to register the reducer:
+
+    ```ts
+    const onMyAction = createOnAction<MyEvent>("MY/ACTION");
+    // inside an init function:
+    onMyAction<AppState>(register, (state, action) => { ...; return state; });
+    ```
+
+## REST helpers
+
+Registered via `PiRegister` (the argument passed to `start()` init functions, or via `register()`):
+
+| Method | Description |
+|---|---|
+| `register.GET(props)` | Register an HTTP GET handler |
+| `register.POST(props)` | Register an HTTP POST handler |
+| `register.PUT(props)` | Register an HTTP PUT handler |
+| `register.PATCH(props)` | Register an HTTP PATCH handler |
+| `register.DELETE(props)` | Register an HTTP DELETE handler |
+
+See the [REST API guide](../guides/rest-api.md) for usage details.
+
+## TypeScript types
+
+See [TypeScript Types](types.md) for the key interfaces and type aliases.
+
+
+## register / registerCard
+
+# register / registerCard
+
+## `register(callback)`
+
+Buffers a registration callback until `start()` creates the Redux store.
+Safe to call from module-level code at any import order.
+
+```ts
+import { register } from "@pihanga2/core";
+
+register((r: PiRegister) => {
+  r.card("page/home", { cardType: "my/page", title: "Home" });
+  r.window({ cardType: "my/framework" });
+});
+```
+
+The callback receives a `PiRegister` handle with the following methods:
+
+### `r.card(name, props)`
+
+Register a named card instance.
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | `string` | Unique card instance name in the registry |
+| `props` | `PiCardDef` | Card definition (cardType + any typed props) |
+
+### `r.window(props)`
+
+Register the top-level framework card (rendered as `<Card name="_window"/>`).
+
+### `r.GET / r.POST / r.PUT / r.PATCH / r.DELETE`
+
+Register REST handlers. See the [REST API guide](../guides/rest-api.md).
+
+### `r.reducer`
+
+Direct access to the `PiReducer` handle for registering Redux reducers:
+
+```ts
+r.reducer.register("MY_ACTION", (state, action) => ({ ...state }));
+r.reducer.registerOneShot("ONCE", (state, action) => ({ ...state }));
+r.reducer.dispatch({ type: "INIT" });
+```
+
+---
+
+## `registerCardComponent(props)`
+
+Register the React component for a card type. Must be called before `start()` renders.
+
+```ts
+import { registerCardComponent } from "@pihanga2/core";
+
+registerCardComponent({
+  name: "my/counter",          // card type identifier
+  component: CounterComponent, // React function component
+  events: COUNTER_ACTIONS,     // action type map from actionTypesToEvents()
+});
+```
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | `string` | Card type ID (matches `createCardDeclaration` name) |
+| `component` | `React.FC` | The React component to render |
+| `events` | `EventMapper` | Map of event names → Redux action type strings |
+
+---
+
+## `createCardDeclaration<P, E>(name)`
+
+Creates a typed card factory function.
+
+```ts
+const CounterCard = createCardDeclaration<CounterProps, CounterEvents>("my/counter");
+
+// Usage (returns a PiCardDef):
+const def = CounterCard({ count: 0, label: "Hits" });
+```
+
+---
+
+## `actionTypesToEvents<E>(cardName)`
+
+Maps event handler names to Redux action type strings. Used when registering card components.
+
+```ts
+// CounterEvents = { onIncrement: { delta: number }; onReset: {} }
+const COUNTER_ACTIONS = actionTypesToEvents<CounterEvents>("my/counter");
+// → { onIncrement: "my/counter:onIncrement", onReset: "my/counter:onReset" }
+```
+
+
+## start()
+
+# start()
+
+Bootstrap the Pihanga application. Creates the Redux store, sets up routing, and mounts React.
+
+!!! warning "Call once"
+    `start()` should be called exactly once per application. Calling it a second time
+    creates a second Redux store. Use `register()` for all card/REST registrations.
+
+## Signature
+
+```ts
+function start(
+  initialState: ReduxState,
+  initFns?: Array<(r: PiRegister) => void>,
+  props?: StartProps,
+): void;
+```
+
+## Parameters
+
+### `initialState`
+
+The initial Redux state object. Must be a plain serialisable object.
+
+```ts
+start({
+  app: { title: "My App", isLoading: false },
+  user: { name: null },
+});
+```
+
+### `initFns` (optional)
+
+An array of registration callbacks. Each receives a `PiRegister` handle. These callbacks are
+flushed after the store is created, in order.
+
+```ts
+start(initialState, [myInit, anotherInit]);
+```
+
+### `props` (optional)
+
+```ts
+type StartProps = {
+  /** Target DOM element (default: document.getElementById("root")) */
+  rootElement?: HTMLElement;
+
+  /** Use HTML5 history API instead of hash routing (default: false) */
+  historyMode?: boolean;
+
+  /** Suppress Redux serializable-check warnings for specific paths */
+  ignoredActionPaths?: string[];
+  ignoredStatePaths?: string[];
+};
+```
+
+## Example
+
+```ts title="src/main.ts"
+import { start } from "@pihanga2/core";
+import { coreInit } from "./core.pihanga";
+import { dashboardInit } from "./dashboard/dashboard.pihanga";
+
+start(
+  {
+    app: { title: "Dashboard", currentPage: "/" },
+    dashboard: { items: [] },
+  },
+  [coreInit, dashboardInit],
+  {
+    historyMode: true,
+    ignoredStatePaths: ["app.someNonSerializable"],
+  },
+);
+```
+
+
+## TypeScript Types
+
+# TypeScript Types
+
+All types are exported from `@pihanga2/core` and `@pihanga2/core/types`.
+
+## `PiCardProps<P, E>`
+
+The combined prop type for a card component. Merges card props with event dispatchers.
+
+```ts
+type PiCardProps<P, E> = P & {
+  [K in keyof E as `on${Capitalize<string & K>}`]: (payload: E[K]) => void;
+} & { dispatch: DispatchF; cardName: string };
+```
+
+**Usage:**
+
+```ts
+type MyProps = { title: string };
+type MyEvents = { onSave: { value: string } };
+
+function MyCard({ title, onSave }: PiCardProps<MyProps, MyEvents>) { ... }
+```
+
+## `PiCardDef`
+
+The serialised card instance stored in the Redux state.
+
+```ts
+type PiCardDef = {
+  cardType: string;
+  [key: string]: unknown;
+};
+```
+
+## `ReduxState`
+
+The base type for the entire Redux state tree.
+
+```ts
+type ReduxState = {
+  pihanga?: {
+    route?: Route;
+    reducers?: string[];
+  };
+  [key: string]: unknown;
+};
+```
+
+## `ReduxAction`
+
+Base type for all Redux actions in Pihanga.
+
+```ts
+type ReduxAction = {
+  type: string;
+  _id?: string;          // correlation id (auto-generated)
+  _replyTo?: string;     // for request/reply patterns
+  [key: string]: unknown;
+};
+```
+
+## `DispatchF`
+
+The typed dispatch function signature.
+
+```ts
+type DispatchF = (action: ReduxAction) => string; // returns action._id
+```
+
+## `PiReducer`
+
+The handle returned by the reducer factory; passed to `PiRegister.reducer`.
+
+```ts
+interface PiReducer {
+  register: PiRegisterReducerF;
+  registerOneShot: PiRegisterOneShotReducerF;
+  dispatch: DispatchF;
+  dispatchFromReducer: DispatchF;
+}
+```
+
+## `ReduceF<S, A>`
+
+The signature of a multi-run reducer function.
+
+```ts
+type ReduceF<S extends ReduxState, A extends ReduxAction> = (
+  state: S,
+  action: A,
+  dispatch: DispatchF,
+  opts: ReduceOpts<S>,
+) => void;
+```
+
+## `Route`
+
+```ts
+type Route = {
+  path: string;
+  query: Record<string, string>;
+};
+```
+
+## REST types
+
+See `@pihanga2/core/rest` for `PiRegisterGetProps`, `PiRegisterPoPuPaProps`,
+`PiRegisterDeleteProps`, and related types.
+
+
+# Reference
+
+## Glossary
+
+# Glossary
+
+**Card**
+: A self-contained UI unit in Pihanga. A card has a *type* (a string ID), *props* (configuration),
+and *events* (user interactions). Cards are rendered by name from the global registry.
+
+**Card instance**
+: A concrete, named card registered in the Redux state via `r.card("name", CardFactory({...}))`.
+Its name is used by `<Card name="..."/>` to look up and render the correct component.
+
+**Card type**
+: A string identifier (e.g. `"my/counter"`) that maps to a registered React component.
+Created with `createCardDeclaration`.
+
+**`PiRegister`**
+: The registration handle passed to callbacks inside `register()`. Provides methods to
+register card instances, card components, REST handlers, and reducers.
+
+**`PiReducer`**
+: The Redux reducer handle exposed via `PiRegister.reducer`. Used to register action handlers
+and dispatch actions.
+
+**`register()`**
+: A buffer function that queues registration callbacks before `start()` creates the Redux store.
+Safe to call from module-level code.
+
+**`registerCardComponent()`**
+: Registers a React component for a card type. Must be called before `start()` renders.
+
+**`start()`**
+: Bootstraps the Pihanga application — creates the Redux store, sets up routing, and mounts
+React into the DOM. Called once per application.
+
+**`usePiReducer`**
+: A React hook that registers a Redux reducer scoped to the lifetime of the component.
+Automatically cancels when the component unmounts.
+
+**`createOnAction`**
+: Registers a module-level Redux reducer (outside any component). Equivalent to
+`r.reducer.register(...)` but callable anywhere.
+
+**`showPage`**
+: An action creator that dispatches a navigation event, changing the current route.
+
+**`onShowPage`**
+: Registers a handler that fires when the router matches a specific path.
+
+**dispatchPipe**
+: A utility in `ReduceOpts` that wraps async Redux round-trips (request → reply)
+with automatic timeout and cleanup.
+
+**`_id` / `_replyTo`**
+: Auto-generated fields on `ReduxAction`. `_id` is the correlation ID of a dispatched action;
+`_replyTo` is set on reply actions to link them back to their request.
+
+
+# Community
+
+## Contributing
+
+# Contributing
+
+Contributions are welcome! Here's how to get started.
+
+## Development setup
+
+```bash
+git clone https://github.com/ivcap-works/pihanga-core.git
+cd pihanga-core
+make install
+```
+
+## Running checks
+
+```bash
+make check        # lint + type-check + tests (CI gate)
+make lint         # ESLint only
+make type-check   # TypeScript only
+make test         # Vitest in watch mode
+make test-run     # Vitest single run
+```
+
+## Project structure
+
+```
+src/
+├── index.ts          # Public API
+├── types.ts          # Core TypeScript types
+├── card.tsx          # <Card> component, usePiReducer hook
+├── register.ts       # Low-level card registry
+├── register_cards.ts # addCard, registerCardComponent, createCardDeclaration
+├── reducer.ts        # createReducer — Redux reducer factory
+├── redux.ts          # registerActions, actionTypesToEvents, createOnAction
+├── router.ts         # showPage, onShowPage, routing logic
+├── logger.ts         # getLogger (tslog wrapper)
+├── store.ts          # configureStore
+└── rest/             # REST handler registration
+    ├── index.ts
+    ├── types.ts
+    ├── get.ts
+    ├── postPutPatch.ts
+    ├── delete.ts
+    └── utils.ts
+```
+
+## Coding conventions
+
+- **TypeScript strict** — avoid `any`; use generics.
+- **No default exports** — use named exports in all library files.
+- **File naming** — `snake_case` for files in `src/`, camelCase for identifiers.
+- **Logging** — use `getLogger("module-name")` rather than `console.log`.
+- **Immutability** — reducers use Immer; do not mutate state outside Immer producers.
+
+## What NOT to change without discussion
+
+- `src/index.ts` — public API; breaking changes require a semver major bump.
+- `src/types.ts` — core types consumed by all downstream packages.
+- `src/reducer.ts` — tightly coupled to Redux Toolkit internals.
+
+## Publishing
+
+```bash
+make publish    # build + npm publish (requires npm login)
+```
+
+Releases are also triggered automatically by the `publish.yml` GitHub Actions workflow
+when a `v*` tag is pushed.

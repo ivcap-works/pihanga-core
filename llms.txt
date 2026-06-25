@@ -1,0 +1,39 @@
+# @pihanga2/core
+
+> The core runtime library for the Pihanga declarative, card-based UI framework for React.
+
+
+@pihanga2/core is the runtime engine of the Pihanga declarative,
+card-based UI framework for React. It provides card registration,
+Redux store bootstrap, hash/history routing, and typed REST-API helpers.
+
+
+## Getting Started
+
+- [Installation](https://ivcap-works.github.io/pihanga-core/getting-started/installation/index.md)
+- [Quick Start](https://ivcap-works.github.io/pihanga-core/getting-started/quick-start/index.md)
+
+## Guides
+
+- [Overview](https://ivcap-works.github.io/pihanga-core/guides/overview/index.md)
+- [Building an Application](https://ivcap-works.github.io/pihanga-core/guides/deployment/index.md)
+- [Cards](https://ivcap-works.github.io/pihanga-core/guides/cards/index.md)
+- [Redux & Reducers](https://ivcap-works.github.io/pihanga-core/guides/redux/index.md)
+- [Routing](https://ivcap-works.github.io/pihanga-core/guides/routing/index.md)
+- [REST API](https://ivcap-works.github.io/pihanga-core/guides/rest-api/index.md)
+- [REST Full Reference](https://ivcap-works.github.io/pihanga-core/guides/rest-usage/index.md)
+
+## API Reference
+
+- [Overview](https://ivcap-works.github.io/pihanga-core/api/overview/index.md)
+- [register / registerCard](https://ivcap-works.github.io/pihanga-core/api/register/index.md)
+- [start()](https://ivcap-works.github.io/pihanga-core/api/start/index.md)
+- [TypeScript Types](https://ivcap-works.github.io/pihanga-core/api/types/index.md)
+
+## Reference
+
+- [Glossary](https://ivcap-works.github.io/pihanga-core/reference/glossary/index.md)
+
+## Community
+
+- [Contributing](https://ivcap-works.github.io/pihanga-core/community/contributing/index.md)
