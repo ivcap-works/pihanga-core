@@ -33,6 +33,7 @@ nav:
       - Overview: guides/overview.md
       - Building an Application: guides/deployment.md
       - Cards: guides/cards.md
+      - Metacards: guides/metacards.md
       - Redux & Reducers: guides/redux.md
       - Routing: guides/routing.md
       - REST API: guides/rest-api.md
@@ -65,6 +66,7 @@ plugins:
           - guides/overview.md
           - guides/deployment.md
           - guides/cards.md
+          - guides/metacards.md
           - guides/redux.md
           - guides/routing.md
           - guides/rest-api.md

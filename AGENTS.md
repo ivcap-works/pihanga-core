@@ -224,10 +224,10 @@ Both styles are equivalent — use whichever is convenient:
 
 | Style | When to use |
 |---|---|
-| `registerCard("name", ...)` / `registerCardComponent({...})` | Card files and simple init functions (no `PiRegister` needed) |
-| `register.card("name", ...)` / `register.cardComponent({...})` | Init functions that receive a `PiRegister` argument |
+| `registerCard("name", ...)` / `registerCardComponent({...})` / `registerMetaCard({...})` | Card files and simple init functions (no `PiRegister` needed) |
+| `register.card("name", ...)` / `register.cardComponent({...})` / `register.metaCard({...})` | Init functions that receive a `PiRegister` argument |
 
-`registerCardComponent()` (and its siblings) are buffered, so they can safely be called at module load time — before `start()` runs.
+`registerCardComponent()`, `registerMetaCard()`, and `registerCard()` are all buffered, so they can safely be called at module load time — before `start()` runs.
 
 ---
 
@@ -386,6 +386,57 @@ r.DELETE<AppState, DeleteItemAction, unknown>({
 
 See the [full REST guide](https://ivcap-works.github.io/pihanga-core/guides/rest-usage/) for the complete property reference, all verb examples, lifecycle action payloads, and debugging internals.
 
+### Metacards (composite card types)
+
+A **metacard** registers a *type* that expands into multiple sub-cards at registration time. App code uses it identically to a normal card — the expansion is invisible.
+
+```ts
+// form-field.metacard.ts — card-library author writes this once
+import {createCardDeclaration, registerMetaCard} from "@pihanga2/core"
+import type {PiCardDef, PiRegisterMetaCard, RegisterCardF} from "@pihanga2/core"
+import {Input, Stack, Typography} from "@pihanga2/shadcn"
+
+type FormFieldProps = { label: string; placeholder?: string; value: string }
+type FormFieldEvents = { onChange: { value: string } }
+
+export const FormField =
+  createCardDeclaration<FormFieldProps, FormFieldEvents>("form/field")
+
+// Mapper: receives (name, props, registerCard) → returns top PiCardDef
+type FormFieldMapperProps = PiCardDef & FormFieldProps & { onChange?: (ev: {value: string}) => void }
+
+function formFieldMapper(name: string, props: FormFieldMapperProps, registerCard: RegisterCardF): PiCardDef {
+  registerCard(`${name}/label`, Typography({ text: props.label }))
+  registerCard(`${name}/input`, Input({ placeholder: props.placeholder ?? "", value: props.value, onChange: props.onChange }))
+  return Stack({ direction: "vertical", content: [`${name}/label`, `${name}/input`] })
+}
+
+// Self-registering — importing this file is enough, no init() needed
+registerMetaCard({
+  type: "form/field",
+  mapper: formFieldMapper,
+  events: { onChange: "form/field/change" },
+} satisfies PiRegisterMetaCard)
+```
+
+```ts
+// app.pihanga.ts — app code uses it like any other card
+import {registerCard} from "@pihanga2/core"
+import {FormField} from "./form-field.metacard"  // triggers registerMetaCard
+
+registerCard("page/email", FormField<AppState>({
+  label: "Email",
+  value: (s) => s.form.email,
+  onChange: (state, { value }) => { state.form.email = value },
+}))
+// Expands to: page/email/label (typography) + page/email/input (input) + page/email (stack)
+```
+
+**Key rules:**
+- Always prefix sub-card names with `${name}/` to avoid collisions across instances.
+- Use card declaration helpers (`Typography(...)`, `Input(...)`) in the mapper — not raw `{cardType: "..."}` strings.
+- `props` in the concrete mapper CAN be typed more specifically than `any` (see [Metacards guide](https://ivcap-works.github.io/pihanga-core/guides/metacards/)).
+
 ### Reducers outside components
 
 `createOnAction("TYPE")` returns a registration helper — call it with `(register, handler)` inside an init function:
@@ -434,7 +485,7 @@ maintainable cards — study its card implementations before generating new ones
 
 | Pitfall | Fix |
 |---|---|
-| *"unknown card type: x/y"* | `registerCardComponent` for that type hasn't run yet — import the card module before `start()` |
+| *"unknown card type: x/y"* | `registerCardComponent` for that type hasn't run yet — import the card module before `start()`. For metacards: `registerMetaCard` hasn't run yet. |
 | New object returned from state mapper every render | Wrap with `memo(selector, transform)` |
 | `start()` called more than once | Call it exactly once; use `registerCard()` for anything that happens later |
 | RTK serializable-check warning | Pass `disableSerializableStateCheck: true` in the third arg to `start()` |

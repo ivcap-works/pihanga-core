@@ -179,6 +179,20 @@ export function registerCardComponent(declaration: PiRegisterComponent) {
   register((r: PiRegister) => r.cardComponent(declaration));
 }
 
+// Register a metacard type at module-load time — no init function needed.
+// Identical pattern to registerCardComponent: the call is buffered and
+// replayed once start() has wired up PiRegister.
+//
+// Usage:
+//
+// import {registerMetaCard} from "@pihanga2/core";
+// registerMetaCard({ type: "my/meta", mapper, events })
+//
+// Simply importing the file that calls this is enough — no explicit init().
+export function registerMetaCard(declaration: PiRegisterMetaCard) {
+  register((r: PiRegister) => r.metaCard(declaration));
+}
+
 // Register a card
 //
 // Usage:
