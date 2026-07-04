@@ -3,7 +3,7 @@
 A **metacard** is a reusable card *type* that expands into a sub-tree of real cards at registration time.  App code uses it exactly like a normal card — the expansion is invisible to the caller.
 
 !!! tip "When to use a metacard"
-    Use a metacard when you have a recurring layout pattern (e.g. "label + input", "icon + title + body") that you want to declare as a single unit with its own typed props, but whose internals are composed from existing card types.
+    Use a metacard when you have a recurring UI pattern (e.g. "decrement / value / increment", "label + input") that you want to declare as a single unit with its own typed props and events, but whose internals are composed from existing card types.
 
 ---
 
@@ -21,122 +21,244 @@ The internal lookup flow:
 
 ```mermaid
 flowchart TD
-    A["registerCard('page/email', FormField({...}))"] --> B{cardType in cardTypes?}
+    A["registerCard('page/counter', Counter({...}))"] --> B{cardType in cardTypes?}
     B -- yes --> C[Normal card path]
     B -- no --> D{cardType in metacardTypes?}
     D -- yes --> E["mapper(name, props, registerCard)"]
-    E --> F["registerCard('page/email/label', Typography(...))\nregisterCard('page/email/input', Input(...))"]
+    E --> F["registerCard('page/counter/plus', Button(...))\n...other sub-cards..."]
     E --> G["return Stack({ content: [...] })"]
-    G --> H["_registerCard('page/email', stack-def)"]
+    G --> H["_registerCard('page/counter', stack-def)"]
     D -- no --> I["warn: unknown card type"]
 ```
 
 ---
 
-## Defining a metacard
+## Worked example — Counter metacard
+
+The `Counter` metacard assembles three `@pihanga2/shadcn` cards into a decrement/value/increment widget.  It is the reference implementation from `pihanga-shadcn/example`.
 
 ### Step 1 — Declare the surface type
 
-Use `createCardDeclaration` exactly as for a normal card:
+```ts title="src/cards/counter/counter.card.ts"
+import {
+  createCardDeclaration,
+  createOnAction,
+  registerActions,
+  registerMetaCard,
+} from "@pihanga2/core";
+import type {
+  PiCardDef,
+  PiMapProps,
+  PiRegisterMetaCard,
+  ReduxState,
+  RegisterCardF,
+} from "@pihanga2/core";
+import {Stack, Button, Typography} from "@pihanga2/shadcn";
 
-```ts title="src/cards/form-field/form-field.metacard.ts"
-import {createCardDeclaration, registerMetaCard} from "@pihanga2/core";
-import type {PiCardDef, PiRegisterMetaCard, RegisterCardF} from "@pihanga2/core";
-import {Input, Stack, Typography} from "@pihanga2/shadcn";
+const COUNTER_CARD = "meta/counter";
 
-type FormFieldProps = {
-  label: string;
-  placeholder?: string;
-  value: string;
-};
-type FormFieldEvents = {
-  onChange: {value: string};
-};
+/** Card declaration — drop a Counter anywhere in a layout: */
+export const Counter = createCardDeclaration<CounterProps, CounterEvents>(
+  COUNTER_CARD,
+);
 
-export const FormField =
-  createCardDeclaration<FormFieldProps, FormFieldEvents>("form/field");
+/** Namespaced action constants for the Counter meta card. */
+export const COUNTER_ACTION = registerActions(COUNTER_CARD, ["changed"]);
+
+/**
+ * Convenience helper for reducers that respond to a counter change.
+ *
+ * @example
+ * ```ts
+ * onCounterChanged(register, (state, { value }) => { state.count = value });
+ * ```
+ */
+export const onCounterChanged = createOnAction<CounterChangeEvent>(
+  COUNTER_ACTION.CHANGED,
+);
+
+type CounterProps  = { value: number };
+type CounterEvents = { onChange: CounterChangeEvent };
+export type CounterChangeEvent = { value: number };
 ```
 
 ### Step 2 — Write the mapper
 
 The mapper receives `(name, props, registerCard)` and must:
 
-- register all sub-cards via the provided `registerCard`
+- register all named sub-cards via the provided `registerCard` callback
 - return the **top-level** `PiCardDef`
 
 ```ts
-// Narrow `props` from the erased `any` of MetaCardMapperF.
-// See "Why any?" below.
-type FormFieldMapperProps = PiCardDef &
-  FormFieldProps & {onChange?: (ev: {value: string}) => void};
-
-function formFieldMapper(
-  name: string,
-  props: FormFieldMapperProps,
+function CounterMapper(
+  _: string,
+  props: PiMapProps<CounterProps & CounterEvents>,
   registerCard: RegisterCardF,
 ): PiCardDef {
-  registerCard(`${name}/label`, Typography({text: props.label}));
-
-  registerCard(
-    `${name}/input`,
-    Input({
-      placeholder: props.placeholder ?? "",
-      value: props.value,
-      onChange: props.onChange,
+  // Register the increment button under a stable name so it has a persistent
+  // identity in the card registry.  registerCard returns the card name (or
+  // inline PiCardDef) which can be placed directly in a content array.
+  const plusButton = registerCard(
+    "plus",
+    Button({
+      label: "+",
+      opts: {size: "lg"},
+      // Re-map the raw click event into the domain action COUNTER_ACTION.CHANGED
+      onClickedMapper: (_, {resolve}) => ({
+        type: COUNTER_ACTION.CHANGED,
+        value: resolve(props.value) + 1,   // (1)
+      }),
     }),
   );
 
-  // The returned PiCardDef becomes the card registered under `name`
-  return Stack({direction: "vertical", content: [`${name}/label`, `${name}/input`]});
+  return Stack<AppState>({
+    direction: "row",
+    alignItems: "center",
+    spacing: 4,
+    content: [
+      Button<AppState>({
+        label: "−",
+        opts: {size: "lg"},
+        onClickedMapper: (_, {resolve}) => ({
+          type: COUNTER_ACTION.CHANGED,
+          value: resolve(props.value) - 1,
+        }),
+      }),
+
+      // text is a state mapper so it re-evaluates on every Redux state change
+      Typography<AppState>({
+        text: (_, {resolve}) => `Count: ${resolve(props.value)}`,  // (2)
+        level: "h2",
+        className: "min-w-[120px] text-center",
+      }),
+
+      plusButton,
+    ],
+  });
 }
 ```
-
-!!! info "Use card declaration helpers, not raw `{cardType: '...'}` objects"
-    `Typography({...})` is simply `createCardDeclaration("shadcn/typography")({...})`.
-    It returns the same `PiCardDef` but with TypeScript prop-checking and no hardcoded string.
 
 ### Step 3 — Register at module-load time
 
 ```ts
 registerMetaCard({
-  type: "form/field",                    // must match cardType in createCardDeclaration
-  mapper: formFieldMapper,
-  events: {onChange: "form/field/change"}, // event name → Redux action type
+  type: COUNTER_CARD,
+  mapper: CounterMapper,
+  events: COUNTER_ACTION,   // maps event name → Redux action type
 } satisfies PiRegisterMetaCard);
 ```
 
-`registerMetaCard` uses the same buffered `register()` mechanism as `registerCardComponent` — the call is queued and replayed once `start()` has wired up `PiRegister`.  **Importing the file is enough; no explicit `init` function is needed.**
+`registerMetaCard` uses the same buffered mechanism as `registerCardComponent` — the call is queued and replayed once `start()` has wired up `PiRegister`.  **Importing the file is enough; no explicit `init` function is needed.**
 
 ---
 
-## Using a metacard
-
-From the app's perspective there is no difference from using a normal card:
+## Using the metacard
 
 ```ts title="src/app.pihanga.ts"
 import {registerCard} from "@pihanga2/core";
 import type {AppState} from "./app.state";
-// Importing the metacard file registers the "form/field" type automatically
-import {FormField} from "./cards/form-field/form-field.metacard";
+// Importing registers the "meta/counter" type automatically
+import {Counter, onCounterChanged} from "./cards/counter/counter.card";
 
 registerCard(
-  "page/email-field",
-  FormField<AppState>({
-    label: "Email",
-    placeholder: "you@example.com",
-    value: (s) => s.form.email,
+  "page/counter",
+  Counter<AppState>({
+    value: (s) => s.count,                      // state mapper
     onChange: (state, {value}) => {
-      state.form.email = value;
+      state.count = value;
     },
   }),
 );
 ```
 
-When the buffer is flushed, `_registerCard` finds `"form/field"` in `metacardTypes` and calls the mapper, which registers:
+When flushed, `_registerCard` finds `"meta/counter"` in `metacardTypes` and calls `CounterMapper`, which registers:
 
-- `"page/email-field/label"` → `shadcn/typography`
-- `"page/email-field/input"` → `shadcn/input`
-- `"page/email-field"` → `shadcn/stack` (the top card)
+- `"page/counter/plus"` → `shadcn/button`
+- `"page/counter"` → `shadcn/stack` (the top card, containing inline sub-cards)
+
+---
+
+## `resolve` — reading props that may be state mappers { #resolve }
+
+Props passed to a metacard may be **plain values** *or* **state mappers** `(s: S, ctx) => T` (because `PiMapProps` permits both).  The mapper function itself runs at *registration time*, before any state exists, so calling `props.value` may hand you a function rather than a number.
+
+The `registerCard` callback provides a `resolve` function in the context argument of every event mapper and state mapper:
+
+```ts
+// (1) Inside an onXxxMapper (event re-mapping):
+onClickedMapper: (_, {resolve}) => ({
+  type: COUNTER_ACTION.CHANGED,
+  value: resolve(props.value) + 1,  // resolve evaluates the state mapper NOW
+                                     // using the current Redux state
+}),
+
+// (2) Inside a state mapper of a sub-card:
+text: (_, {resolve}) => `Count: ${resolve(props.value)}`,
+//        ↑ ctx.resolve  ─ resolves at render time with the current state
+```
+
+`resolve(prop)` behaves as follows:
+
+| `prop` is … | `resolve` returns … |
+|---|---|
+| A plain value (string, number, …) | the value unchanged |
+| A state mapper `(s, ctx) => T` | `mapper(currentState, ctx)` |
+
+For sub-cards of a metacard, `resolve` automatically uses **`metaCtxtProps`** (the `ctxtProps` from where the metacard itself was placed) as the `ctxtProps` when calling the mapper — so state mappers that reference `ctxtProps.someField` will correctly see the metacard's placement context rather than the sub-card's own context.
+
+---
+
+## Event re-mapping with `onXxxMapper` { #event-remapping }
+
+Metacards can intercept and transform low-level events from inner cards into domain-specific actions using `onXxxMapper`:
+
+```
+Button.onClicked  ──► onClickedMapper ──► COUNTER_ACTION.CHANGED
+                                           { value: newCount }
+```
+
+The mapper receives `(event, ctxtProps)` where `ctxtProps.resolve` is available:
+
+```ts
+onClickedMapper: (clickEvent, {resolve}) => ({
+  type: COUNTER_ACTION.CHANGED,
+  value: resolve(props.value) + 1,
+}),
+```
+
+Consumers of `Counter` never need to know about raw click events; they simply handle `onCounterChanged` and receive the updated value.
+
+---
+
+## `metaCtxtProps` — accessing the metacard's placement context { #metactxtprops }
+
+When a metacard is placed by a parent card that passes extra `ctxtProps` (e.g. from a table row), sub-cards of the metacard need access to those props too.  They are available as `metaCtxtProps` in the `StateMapperContext`:
+
+```ts
+// Parent places the metacard with extra context:
+// <Card cardName="page/element" elementData={...} parentCard="page/table" />
+
+// Inside the metacard definition, sub-card state mappers can use metaCtxtProps:
+registerCard(
+  "inner",
+  MyInnerCard<AppState>({
+    // metaCtxtProps = ctxtProps of the metacard's top card
+    properties: (s, {metaCtxtProps}) => metaCtxtProps.elementData.properties,
+  }),
+);
+```
+
+`metaCtxtProps` is `undefined` for top-level cards and cards that are not sub-cards of a metacard.
+
+The same context is available via `resolve` inside an event mapper:
+
+```ts
+onClickedMapper: (_, {resolve}) => {
+  // props.properties might be the state mapper above
+  const props = resolve(myProps.properties);
+  return {type: "MY_ACTION", props};
+},
+```
 
 ---
 
@@ -152,15 +274,21 @@ type MyMapperProps = PiCardDef & MyCardProps & {onFoo?: (ev: FooEvent) => void};
 function myMapper(name: string, props: MyMapperProps, registerCard: RegisterCardF) { ... }
 ```
 
-Note that each prop *may* be a **state mapper** `(s: S) => T` rather than a plain value (because `PiMapProps` permits both).  Sub-cards handle this correctly at render time, so just forward props as-is.
+Note that each prop *may* be a **state mapper** `(s: S, ctx) => T` rather than a plain value (because `PiMapProps` permits both).  Always use `resolve(props.xxx)` inside event mappers and sub-card state mappers to handle both cases correctly.
 
 ---
 
 ## Common pitfalls
 
 !!! warning "Metacard type not found"
-    `"unknown card type: form/field"` means `registerMetaCard` has not been called yet.
+    `"unknown card type: meta/counter"` means `registerMetaCard` has not been called yet.
     Ensure the metacard file is imported before `start()` runs.
 
 !!! warning "Sub-card name collisions"
-    Always prefix sub-card names with `${name}/` (e.g. `${name}/label`) to guarantee uniqueness across multiple instances of the same metacard.
+    Always prefix sub-card names with `"${name}/"` (e.g. `registerCard("plus", ...)` — the framework automatically prepends `name + "/"`) to guarantee uniqueness across multiple instances of the same metacard.
+
+!!! warning "Calling props.value directly in the mapper"
+    `props.value` may be a state mapper function rather than a plain number.  Always use `resolve(props.value)` inside event mappers and sub-card state mappers — never call the prop directly.
+
+!!! warning "metaCtxtProps undefined for non-sub-cards"
+    `metaCtxtProps` is only set for cards registered *inside* a metacard mapper (sub-cards). The metacard's own top card uses `ctxtProps` as usual.

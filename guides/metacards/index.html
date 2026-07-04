@@ -733,15 +733,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#defining-a-metacard" class="md-nav__link">
+  <a href="#worked-example-counter-metacard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Defining a metacard
+        Worked example — Counter metacard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Defining a metacard">
+    <nav class="md-nav" aria-label="Worked example — Counter metacard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -783,10 +783,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-a-metacard" class="md-nav__link">
+  <a href="#using-the-metacard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Using a metacard
+        Using the metacard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve — reading props that may be state mappers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-remapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event re-mapping with onXxxMapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metactxtprops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metaCtxtProps — accessing the metacard's placement context
       
     </span>
   </a>
@@ -1326,15 +1359,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#defining-a-metacard" class="md-nav__link">
+  <a href="#worked-example-counter-metacard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Defining a metacard
+        Worked example — Counter metacard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Defining a metacard">
+    <nav class="md-nav" aria-label="Worked example — Counter metacard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1376,10 +1409,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-a-metacard" class="md-nav__link">
+  <a href="#using-the-metacard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Using a metacard
+        Using the metacard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve — reading props that may be state mappers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-remapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event re-mapping with onXxxMapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metactxtprops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metaCtxtProps — accessing the metacard's placement context
       
     </span>
   </a>
@@ -1432,7 +1498,7 @@
 <p>A <strong>metacard</strong> is a reusable card <em>type</em> that expands into a sub-tree of real cards at registration time.  App code uses it exactly like a normal card — the expansion is invisible to the caller.</p>
 <div class="admonition tip">
 <p class="admonition-title">When to use a metacard</p>
-<p>Use a metacard when you have a recurring layout pattern (e.g. "label + input", "icon + title + body") that you want to declare as a single unit with its own typed props, but whose internals are composed from existing card types.</p>
+<p>Use a metacard when you have a recurring UI pattern (e.g. "decrement / value / increment", "label + input") that you want to declare as a single unit with its own typed props and events, but whose internals are composed from existing card types.</p>
 </div>
 <hr />
 <h2 id="metacard-vs-normal-card">Metacard vs normal card<a class="headerlink" href="#metacard-vs-normal-card" title="Permanent link">&para;</a></h2>
@@ -1474,123 +1540,240 @@
 </table>
 <p>The internal lookup flow:</p>
 <pre class="mermaid"><code>flowchart TD
-    A["registerCard('page/email', FormField({...}))"] --&gt; B{cardType in cardTypes?}
+    A["registerCard('page/counter', Counter({...}))"] --&gt; B{cardType in cardTypes?}
     B -- yes --&gt; C[Normal card path]
     B -- no --&gt; D{cardType in metacardTypes?}
     D -- yes --&gt; E["mapper(name, props, registerCard)"]
-    E --&gt; F["registerCard('page/email/label', Typography(...))\nregisterCard('page/email/input', Input(...))"]
+    E --&gt; F["registerCard('page/counter/plus', Button(...))\n...other sub-cards..."]
     E --&gt; G["return Stack({ content: [...] })"]
-    G --&gt; H["_registerCard('page/email', stack-def)"]
+    G --&gt; H["_registerCard('page/counter', stack-def)"]
     D -- no --&gt; I["warn: unknown card type"]</code></pre>
 <hr />
-<h2 id="defining-a-metacard">Defining a metacard<a class="headerlink" href="#defining-a-metacard" title="Permanent link">&para;</a></h2>
+<h2 id="worked-example-counter-metacard">Worked example — Counter metacard<a class="headerlink" href="#worked-example-counter-metacard" title="Permanent link">&para;</a></h2>
+<p>The <code>Counter</code> metacard assembles three <code>@pihanga2/shadcn</code> cards into a decrement/value/increment widget.  It is the reference implementation from <code>pihanga-shadcn/example</code>.</p>
 <h3 id="step-1-declare-the-surface-type">Step 1 — Declare the surface type<a class="headerlink" href="#step-1-declare-the-surface-type" title="Permanent link">&para;</a></h3>
-<p>Use <code>createCardDeclaration</code> exactly as for a normal card:</p>
-<div class="highlight"><span class="filename">src/cards/form-field/form-field.metacard.ts</span><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">createCardDeclaration</span><span class="p">,</span><span class="w"> </span><span class="nx">registerMetaCard</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">import</span><span class="w"> </span><span class="kr">type</span><span class="w"> </span><span class="p">{</span><span class="nx">PiCardDef</span><span class="p">,</span><span class="w"> </span><span class="nx">PiRegisterMetaCard</span><span class="p">,</span><span class="w"> </span><span class="nx">RegisterCardF</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">Input</span><span class="p">,</span><span class="w"> </span><span class="nx">Stack</span><span class="p">,</span><span class="w"> </span><span class="nx">Typography</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/shadcn&quot;</span><span class="p">;</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kr">type</span><span class="w"> </span><span class="nx">FormFieldProps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nx">placeholder?</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">};</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="kr">type</span><span class="w"> </span><span class="nx">FormFieldEvents</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">};</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">};</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">FormField</span><span class="w"> </span><span class="o">=</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span><span class="nx">createCardDeclaration</span><span class="o">&lt;</span><span class="nx">FormFieldProps</span><span class="p">,</span><span class="w"> </span><span class="nx">FormFieldEvents</span><span class="o">&gt;</span><span class="p">(</span><span class="s2">&quot;form/field&quot;</span><span class="p">);</span>
+<div class="highlight"><span class="filename">src/cards/counter/counter.card.ts</span><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nx">createCardDeclaration</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nx">createOnAction</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nx">registerActions</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nx">registerMetaCard</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">import</span><span class="w"> </span><span class="kr">type</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nx">PiCardDef</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nx">PiMapProps</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nx">PiRegisterMetaCard</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nx">ReduxState</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nx">RegisterCardF</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">Stack</span><span class="p">,</span><span class="w"> </span><span class="nx">Button</span><span class="p">,</span><span class="w"> </span><span class="nx">Typography</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/shadcn&quot;</span><span class="p">;</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="kd">const</span><span class="w"> </span><span class="nx">COUNTER_CARD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;meta/counter&quot;</span><span class="p">;</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="cm">/** Card declaration — drop a Counter anywhere in a layout: */</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">Counter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createCardDeclaration</span><span class="o">&lt;</span><span class="nx">CounterProps</span><span class="p">,</span><span class="w"> </span><span class="nx">CounterEvents</span><span class="o">&gt;</span><span class="p">(</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span><span class="nx">COUNTER_CARD</span><span class="p">,</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="p">);</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="cm">/** Namespaced action constants for the Counter meta card. */</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">COUNTER_ACTION</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">registerActions</span><span class="p">(</span><span class="nx">COUNTER_CARD</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;changed&quot;</span><span class="p">]);</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="cm">/**</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="cm"> * Convenience helper for reducers that respond to a counter change.</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="cm"> *</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="cm"> * @example</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="cm"> * ```ts</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="cm"> * onCounterChanged(register, (state, { value }) =&gt; { state.count = value });</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="cm"> * ```</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="cm"> */</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">onCounterChanged</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createOnAction</span><span class="o">&lt;</span><span class="nx">CounterChangeEvent</span><span class="o">&gt;</span><span class="p">(</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">  </span><span class="nx">COUNTER_ACTION</span><span class="p">.</span><span class="nx">CHANGED</span><span class="p">,</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="p">);</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="kr">type</span><span class="w"> </span><span class="nx">CounterProps</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="w"> </span><span class="p">};</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="kr">type</span><span class="w"> </span><span class="nx">CounterEvents</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="kt">CounterChangeEvent</span><span class="w"> </span><span class="p">};</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="k">export</span><span class="w"> </span><span class="kr">type</span><span class="w"> </span><span class="nx">CounterChangeEvent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="w"> </span><span class="p">};</span>
 </code></pre></div>
 <h3 id="step-2-write-the-mapper">Step 2 — Write the mapper<a class="headerlink" href="#step-2-write-the-mapper" title="Permanent link">&para;</a></h3>
 <p>The mapper receives <code>(name, props, registerCard)</code> and must:</p>
 <ul>
-<li>register all sub-cards via the provided <code>registerCard</code></li>
+<li>register all named sub-cards via the provided <code>registerCard</code> callback</li>
 <li>return the <strong>top-level</strong> <code>PiCardDef</code></li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Narrow `props` from the erased `any` of MetaCardMapperF.</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">// See &quot;Why any?&quot; below.</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kr">type</span><span class="w"> </span><span class="nx">FormFieldMapperProps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">PiCardDef</span><span class="w"> </span><span class="o">&amp;</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nx">FormFieldProps</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="nx">onChange</span><span class="o">?:</span><span class="w"> </span><span class="p">(</span><span class="nx">ev</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="ow">void</span><span class="p">};</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kd">function</span><span class="w"> </span><span class="nx">formFieldMapper</span><span class="p">(</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nx">props</span><span class="o">:</span><span class="w"> </span><span class="kt">FormFieldMapperProps</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nx">registerCard</span><span class="o">:</span><span class="w"> </span><span class="kt">RegisterCardF</span><span class="p">,</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nx">PiCardDef</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nx">registerCard</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">/label`</span><span class="p">,</span><span class="w"> </span><span class="nx">Typography</span><span class="p">({</span><span class="nx">text</span><span class="o">:</span><span class="w"> </span><span class="kt">props.label</span><span class="p">}));</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nx">registerCard</span><span class="p">(</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="sb">`</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">/input`</span><span class="p">,</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="nx">Input</span><span class="p">({</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">      </span><span class="nx">placeholder</span><span class="o">:</span><span class="w"> </span><span class="kt">props.placeholder</span><span class="w"> </span><span class="o">??</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">      </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">props.value</span><span class="p">,</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">      </span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="kt">props.onChange</span><span class="p">,</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">function</span><span class="w"> </span><span class="nx">CounterMapper</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nx">_</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nx">props</span><span class="o">:</span><span class="w"> </span><span class="kt">PiMapProps</span><span class="o">&lt;</span><span class="nx">CounterProps</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nx">CounterEvents</span><span class="o">&gt;</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nx">registerCard</span><span class="o">:</span><span class="w"> </span><span class="kt">RegisterCardF</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nx">PiCardDef</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="c1">// Register the increment button under a stable name so it has a persistent</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="c1">// identity in the card registry.  registerCard returns the card name (or</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="c1">// inline PiCardDef) which can be placed directly in a content array.</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">plusButton</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">registerCard</span><span class="p">(</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="s2">&quot;plus&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="nx">Button</span><span class="p">({</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">      </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;+&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">      </span><span class="nx">opts</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nx">size</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;lg&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">      </span><span class="c1">// Re-map the raw click event into the domain action COUNTER_ACTION.CHANGED</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="nx">onClickedMapper</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">        </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="nx">COUNTER_ACTION</span><span class="p">.</span><span class="nx">CHANGED</span><span class="p">,</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">        </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w">   </span><span class="c1">// (1)</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">      </span><span class="p">}),</span>
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="p">}),</span>
 <a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span><span class="p">);</span>
 <a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">  </span><span class="c1">// The returned PiCardDef becomes the card registered under `name`</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">Stack</span><span class="p">({</span><span class="nx">direction</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;vertical&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="sb">`</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">/label`</span><span class="p">,</span><span class="w"> </span><span class="sb">`</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">/input`</span><span class="p">]});</span>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="p">}</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">Stack</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span><span class="nx">direction</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;row&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">    </span><span class="nx">alignItems</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;center&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span><span class="nx">spacing</span><span class="o">:</span><span class="w"> </span><span class="kt">4</span><span class="p">,</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">    </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">      </span><span class="nx">Button</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">        </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;−&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">        </span><span class="nx">opts</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nx">size</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;lg&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">        </span><span class="nx">onClickedMapper</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">          </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="nx">COUNTER_ACTION</span><span class="p">.</span><span class="nx">CHANGED</span><span class="p">,</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">          </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">        </span><span class="p">}),</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">      </span><span class="p">}),</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">      </span><span class="c1">// text is a state mapper so it re-evaluates on every Redux state change</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">      </span><span class="nx">Typography</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">        </span><span class="nx">text</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="sb">`Count: </span><span class="si">${</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span><span class="w">  </span><span class="c1">// (2)</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="w">        </span><span class="nx">level</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;h2&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="w">        </span><span class="nx">className</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;min-w-[120px] text-center&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="w">      </span><span class="p">}),</span>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="w">      </span><span class="nx">plusButton</span><span class="p">,</span>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">  </span><span class="p">});</span>
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="p">}</span>
 </code></pre></div>
-<div class="admonition info">
-<p class="admonition-title">Use card declaration helpers, not raw <code>{cardType: '...'}</code> objects</p>
-<p><code>Typography({...})</code> is simply <code>createCardDeclaration("shadcn/typography")({...})</code>.
-It returns the same <code>PiCardDef</code> but with TypeScript prop-checking and no hardcoded string.</p>
-</div>
 <h3 id="step-3-register-at-module-load-time">Step 3 — Register at module-load time<a class="headerlink" href="#step-3-register-at-module-load-time" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">registerMetaCard</span><span class="p">({</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;form/field&quot;</span><span class="p">,</span><span class="w">                    </span><span class="c1">// must match cardType in createCardDeclaration</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">mapper</span><span class="o">:</span><span class="w"> </span><span class="kt">formFieldMapper</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">events</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;form/field/change&quot;</span><span class="p">},</span><span class="w"> </span><span class="c1">// event name → Redux action type</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="nx">COUNTER_CARD</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">mapper</span><span class="o">:</span><span class="w"> </span><span class="kt">CounterMapper</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">events</span><span class="o">:</span><span class="w"> </span><span class="kt">COUNTER_ACTION</span><span class="p">,</span><span class="w">   </span><span class="c1">// maps event name → Redux action type</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span><span class="w"> </span><span class="nx">satisfies</span><span class="w"> </span><span class="nx">PiRegisterMetaCard</span><span class="p">);</span>
 </code></pre></div>
-<p><code>registerMetaCard</code> uses the same buffered <code>register()</code> mechanism as <code>registerCardComponent</code> — the call is queued and replayed once <code>start()</code> has wired up <code>PiRegister</code>.  <strong>Importing the file is enough; no explicit <code>init</code> function is needed.</strong></p>
+<p><code>registerMetaCard</code> uses the same buffered mechanism as <code>registerCardComponent</code> — the call is queued and replayed once <code>start()</code> has wired up <code>PiRegister</code>.  <strong>Importing the file is enough; no explicit <code>init</code> function is needed.</strong></p>
 <hr />
-<h2 id="using-a-metacard">Using a metacard<a class="headerlink" href="#using-a-metacard" title="Permanent link">&para;</a></h2>
-<p>From the app's perspective there is no difference from using a normal card:</p>
+<h2 id="using-the-metacard">Using the metacard<a class="headerlink" href="#using-the-metacard" title="Permanent link">&para;</a></h2>
 <div class="highlight"><span class="filename">src/app.pihanga.ts</span><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">registerCard</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">import</span><span class="w"> </span><span class="kr">type</span><span class="w"> </span><span class="p">{</span><span class="nx">AppState</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./app.state&quot;</span><span class="p">;</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1">// Importing the metacard file registers the &quot;form/field&quot; type automatically</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">FormField</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./cards/form-field/form-field.metacard&quot;</span><span class="p">;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1">// Importing registers the &quot;meta/counter&quot; type automatically</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="nx">Counter</span><span class="p">,</span><span class="w"> </span><span class="nx">onCounterChanged</span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./cards/counter/counter.card&quot;</span><span class="p">;</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nx">registerCard</span><span class="p">(</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="s2">&quot;page/email-field&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nx">FormField</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Email&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nx">placeholder</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;you@example.com&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">form</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">value</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nx">state</span><span class="p">.</span><span class="nx">form</span><span class="p">.</span><span class="nx">email</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">value</span><span class="p">;</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="p">},</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="p">}),</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="p">);</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="s2">&quot;page/counter&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nx">Counter</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">count</span><span class="p">,</span><span class="w">                      </span><span class="c1">// state mapper</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nx">onChange</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">value</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nx">state</span><span class="p">.</span><span class="nx">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">value</span><span class="p">;</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="p">}),</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">);</span>
 </code></pre></div>
-<p>When the buffer is flushed, <code>_registerCard</code> finds <code>"form/field"</code> in <code>metacardTypes</code> and calls the mapper, which registers:</p>
+<p>When flushed, <code>_registerCard</code> finds <code>"meta/counter"</code> in <code>metacardTypes</code> and calls <code>CounterMapper</code>, which registers:</p>
 <ul>
-<li><code>"page/email-field/label"</code> → <code>shadcn/typography</code></li>
-<li><code>"page/email-field/input"</code> → <code>shadcn/input</code></li>
-<li><code>"page/email-field"</code> → <code>shadcn/stack</code> (the top card)</li>
+<li><code>"page/counter/plus"</code> → <code>shadcn/button</code></li>
+<li><code>"page/counter"</code> → <code>shadcn/stack</code> (the top card, containing inline sub-cards)</li>
 </ul>
+<hr />
+<h2 id="resolve"><code>resolve</code> — reading props that may be state mappers<a class="headerlink" href="#resolve" title="Permanent link">&para;</a></h2>
+<p>Props passed to a metacard may be <strong>plain values</strong> <em>or</em> <strong>state mappers</strong> <code>(s: S, ctx) =&gt; T</code> (because <code>PiMapProps</code> permits both).  The mapper function itself runs at <em>registration time</em>, before any state exists, so calling <code>props.value</code> may hand you a function rather than a number.</p>
+<p>The <code>registerCard</code> callback provides a <code>resolve</code> function in the context argument of every event mapper and state mapper:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// (1) Inside an onXxxMapper (event re-mapping):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nx">onClickedMapper</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="nx">COUNTER_ACTION</span><span class="p">.</span><span class="nx">CHANGED</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w">  </span><span class="c1">// resolve evaluates the state mapper NOW</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">                                     </span><span class="c1">// using the current Redux state</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">}),</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1">// (2) Inside a state mapper of a sub-card:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nx">text</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="sb">`Count: </span><span class="si">${</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1">//        ↑ ctx.resolve  ─ resolves at render time with the current state</span>
+</code></pre></div>
+<p><code>resolve(prop)</code> behaves as follows:</p>
+<table>
+<thead>
+<tr>
+<th><code>prop</code> is …</th>
+<th><code>resolve</code> returns …</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A plain value (string, number, …)</td>
+<td>the value unchanged</td>
+</tr>
+<tr>
+<td>A state mapper <code>(s, ctx) =&gt; T</code></td>
+<td><code>mapper(currentState, ctx)</code></td>
+</tr>
+</tbody>
+</table>
+<p>For sub-cards of a metacard, <code>resolve</code> automatically uses <strong><code>metaCtxtProps</code></strong> (the <code>ctxtProps</code> from where the metacard itself was placed) as the <code>ctxtProps</code> when calling the mapper — so state mappers that reference <code>ctxtProps.someField</code> will correctly see the metacard's placement context rather than the sub-card's own context.</p>
+<hr />
+<h2 id="event-remapping">Event re-mapping with <code>onXxxMapper</code><a class="headerlink" href="#event-remapping" title="Permanent link">&para;</a></h2>
+<p>Metacards can intercept and transform low-level events from inner cards into domain-specific actions using <code>onXxxMapper</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Button.onClicked  ──► onClickedMapper ──► COUNTER_ACTION.CHANGED
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>                                           { value: newCount }
+</code></pre></div>
+<p>The mapper receives <code>(event, ctxtProps)</code> where <code>ctxtProps.resolve</code> is available:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nx">onClickedMapper</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">clickEvent</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="nx">COUNTER_ACTION</span><span class="p">.</span><span class="nx">CHANGED</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">resolve</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">}),</span>
+</code></pre></div>
+<p>Consumers of <code>Counter</code> never need to know about raw click events; they simply handle <code>onCounterChanged</code> and receive the updated value.</p>
+<hr />
+<h2 id="metactxtprops"><code>metaCtxtProps</code> — accessing the metacard's placement context<a class="headerlink" href="#metactxtprops" title="Permanent link">&para;</a></h2>
+<p>When a metacard is placed by a parent card that passes extra <code>ctxtProps</code> (e.g. from a table row), sub-cards of the metacard need access to those props too.  They are available as <code>metaCtxtProps</code> in the <code>StateMapperContext</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// Parent places the metacard with extra context:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">// &lt;Card cardName=&quot;page/element&quot; elementData={...} parentCard=&quot;page/table&quot; /&gt;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1">// Inside the metacard definition, sub-card state mappers can use metaCtxtProps:</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nx">registerCard</span><span class="p">(</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="s2">&quot;inner&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nx">MyInnerCard</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="c1">// metaCtxtProps = ctxtProps of the metacard&#39;s top card</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="nx">properties</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">metaCtxtProps</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">metaCtxtProps</span><span class="p">.</span><span class="nx">elementData</span><span class="p">.</span><span class="nx">properties</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="p">}),</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">);</span>
+</code></pre></div>
+<p><code>metaCtxtProps</code> is <code>undefined</code> for top-level cards and cards that are not sub-cards of a metacard.</p>
+<p>The same context is available via <code>resolve</code> inside an event mapper:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">onClickedMapper</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">resolve</span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="c1">// props.properties might be the state mapper above</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">props</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">resolve</span><span class="p">(</span><span class="nx">myProps</span><span class="p">.</span><span class="nx">properties</span><span class="p">);</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;MY_ACTION&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">props</span><span class="p">};</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">},</span>
+</code></pre></div>
 <hr />
 <h2 id="why-does-metacardmapperf-use-props-any">Why does <code>MetaCardMapperF</code> use <code>props: any</code>?<a class="headerlink" href="#why-does-metacardmapperf-use-props-any" title="Permanent link">&para;</a></h2>
 <p><code>metacardTypes</code> is <code>{[k: string]: MetaCard}</code> where every entry has a <em>different</em> props shape.  There is no way to preserve the generic <code>&lt;P&gt;</code> in a plain dictionary, so the type is erased to <code>any</code> in <code>MetaCardMapperF</code>.</p>
 <p><strong>You can always narrow it in your concrete mapper function.</strong>  TypeScript's <code>any</code> suppresses both covariant and contravariant checks, so assigning <code>(props: MySpecificProps) =&gt; PiCardDef</code> to <code>MetaCardMapperF</code> is valid:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kr">type</span><span class="w"> </span><span class="nx">MyMapperProps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">PiCardDef</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nx">MyCardProps</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="nx">onFoo</span><span class="o">?:</span><span class="w"> </span><span class="p">(</span><span class="nx">ev</span><span class="o">:</span><span class="w"> </span><span class="kt">FooEvent</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="ow">void</span><span class="p">};</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kd">function</span><span class="w"> </span><span class="nx">myMapper</span><span class="p">(</span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">props</span><span class="o">:</span><span class="w"> </span><span class="kt">MyMapperProps</span><span class="p">,</span><span class="w"> </span><span class="nx">registerCard</span><span class="o">:</span><span class="w"> </span><span class="kt">RegisterCardF</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kr">type</span><span class="w"> </span><span class="nx">MyMapperProps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">PiCardDef</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nx">MyCardProps</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="nx">onFoo</span><span class="o">?:</span><span class="w"> </span><span class="p">(</span><span class="nx">ev</span><span class="o">:</span><span class="w"> </span><span class="kt">FooEvent</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="ow">void</span><span class="p">};</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kd">function</span><span class="w"> </span><span class="nx">myMapper</span><span class="p">(</span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">props</span><span class="o">:</span><span class="w"> </span><span class="kt">MyMapperProps</span><span class="p">,</span><span class="w"> </span><span class="nx">registerCard</span><span class="o">:</span><span class="w"> </span><span class="kt">RegisterCardF</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<p>Note that each prop <em>may</em> be a <strong>state mapper</strong> <code>(s: S) =&gt; T</code> rather than a plain value (because <code>PiMapProps</code> permits both).  Sub-cards handle this correctly at render time, so just forward props as-is.</p>
+<p>Note that each prop <em>may</em> be a <strong>state mapper</strong> <code>(s: S, ctx) =&gt; T</code> rather than a plain value (because <code>PiMapProps</code> permits both).  Always use <code>resolve(props.xxx)</code> inside event mappers and sub-card state mappers to handle both cases correctly.</p>
 <hr />
 <h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
 <p class="admonition-title">Metacard type not found</p>
-<p><code>"unknown card type: form/field"</code> means <code>registerMetaCard</code> has not been called yet.
+<p><code>"unknown card type: meta/counter"</code> means <code>registerMetaCard</code> has not been called yet.
 Ensure the metacard file is imported before <code>start()</code> runs.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Sub-card name collisions</p>
-<p>Always prefix sub-card names with <code>${name}/</code> (e.g. <code>${name}/label</code>) to guarantee uniqueness across multiple instances of the same metacard.</p>
+<p>Always prefix sub-card names with <code>"${name}/"</code> (e.g. <code>registerCard("plus", ...)</code> — the framework automatically prepends <code>name + "/"</code>) to guarantee uniqueness across multiple instances of the same metacard.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Calling props.value directly in the mapper</p>
+<p><code>props.value</code> may be a state mapper function rather than a plain number.  Always use <code>resolve(props.value)</code> inside event mappers and sub-card state mappers — never call the prop directly.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">metaCtxtProps undefined for non-sub-cards</p>
+<p><code>metaCtxtProps</code> is only set for cards registered <em>inside</em> a metacard mapper (sub-cards). The metacard's own top card uses <code>ctxtProps</code> as usual.</p>
 </div>
         <div id="llms-copy-button" style="position: fixed; z-index: 1100; top: 80px; right: 20px;">
             <button onclick="copyMarkdownToClipboard()" style="cursor: pointer; background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Copy Markdown</button>
