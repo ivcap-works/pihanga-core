@@ -26,7 +26,7 @@ export function isCardRef(p: any): boolean {
   return p !== null && typeof p === "object" && p.cardType !== undefined;
 }
 
-export type Mapping = {
+export type CardMapping = {
   cardType: string;
   props: {[k: string]: unknown};
   eventMappers: {
@@ -34,6 +34,16 @@ export type Mapping = {
   };
   cardEvents: {[key: string]: string};
   parameters: PiCardDef; // original
+  /**
+   * Set when this card was created as part of a metacard registration.
+   * Both the top card and all sub-cards carry this info.
+   */
+  metaCard?: {
+    /** The metacard's registered name (e.g. `"page/element"`). */
+    name: string;
+    /** Name of the top-level card produced by the metacard mapper (currently always === `name`). */
+    topCard: string;
+  };
 };
 
 export type MetaCard = {
@@ -47,7 +57,7 @@ export const cardTypes: {[k: string]: PiRegisterComponent} = {};
 export const metacardTypes: {[k: string]: MetaCard} = {};
 
 export let framework: string; // name of active UI framework
-export const cardMappings: {[k: string]: Mapping} = {};
+export const cardMappings: {[k: string]: CardMapping} = {};
 export const dispatch2registerReducer: [
   React.Dispatch<any>,
   PiRegisterReducerF,
@@ -203,7 +213,7 @@ export function _updateCardMapping(
   name: string,
   parameters: PiCardDef,
   registerReducer: PiRegisterReducerF,
-  mappings: Mapping,
+  mappings: CardMapping,
 ) {
   return _createCardMapping(
     name,
@@ -227,12 +237,25 @@ function _registerMetadataCard(
       return false;
     }
   }
+  const metaInfo = {name: metaName, topCard: metaName};
+
+  // Intercept sub-card registration to tag each sub-card with metacard info.
+  // We don't overwrite if the sub-card is itself a metacard (it will have set
+  // its own metaCard info).
   function registerCard(name: string, parameters: PiCardDef): PiCardRef {
     const n = `${metaName}/${name}`;
-    return mc.registerCard(n, parameters);
+    const result = mc.registerCard(n, parameters);
+    if (cardMappings[n] && !cardMappings[n].metaCard) {
+      cardMappings[n].metaCard = metaInfo;
+    }
+    return result;
   }
   const top = mc.mapper(metaName, parameters, registerCard);
   _registerCard(metaName, top, registerReducer, mc.events);
+  // Tag the top card itself
+  if (cardMappings[metaName]) {
+    cardMappings[metaName].metaCard = metaInfo;
+  }
   return true;
 }
 

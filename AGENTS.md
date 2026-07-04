@@ -390,51 +390,108 @@ See the [full REST guide](https://ivcap-works.github.io/pihanga-core/guides/rest
 
 A **metacard** registers a *type* that expands into multiple sub-cards at registration time. App code uses it identically to a normal card — the expansion is invisible.
 
+**Step 1 — declare the surface type (card-library author writes this once):**
+
 ```ts
-// form-field.metacard.ts — card-library author writes this once
-import {createCardDeclaration, registerMetaCard} from "@pihanga2/core"
-import type {PiCardDef, PiRegisterMetaCard, RegisterCardF} from "@pihanga2/core"
-import {Input, Stack, Typography} from "@pihanga2/shadcn"
+// counter.card.ts
+import {
+  createCardDeclaration, createOnAction, registerActions, registerMetaCard,
+} from "@pihanga2/core"
+import type {
+  PiCardDef, PiMapProps, PiRegisterMetaCard, ReduxState, RegisterCardF,
+} from "@pihanga2/core"
+import {Stack, Button, Typography} from "@pihanga2/shadcn"
 
-type FormFieldProps = { label: string; placeholder?: string; value: string }
-type FormFieldEvents = { onChange: { value: string } }
+const COUNTER_CARD = "meta/counter"
 
-export const FormField =
-  createCardDeclaration<FormFieldProps, FormFieldEvents>("form/field")
+type CounterProps  = { value: number }
+type CounterEvents = { onChange: CounterChangeEvent }
+export type CounterChangeEvent = { value: number }
 
-// Mapper: receives (name, props, registerCard) → returns top PiCardDef
-type FormFieldMapperProps = PiCardDef & FormFieldProps & { onChange?: (ev: {value: string}) => void }
+export const Counter = createCardDeclaration<CounterProps, CounterEvents>(COUNTER_CARD)
 
-function formFieldMapper(name: string, props: FormFieldMapperProps, registerCard: RegisterCardF): PiCardDef {
-  registerCard(`${name}/label`, Typography({ text: props.label }))
-  registerCard(`${name}/input`, Input({ placeholder: props.placeholder ?? "", value: props.value, onChange: props.onChange }))
-  return Stack({ direction: "vertical", content: [`${name}/label`, `${name}/input`] })
+export const COUNTER_ACTION = registerActions(COUNTER_CARD, ["changed"])
+
+// Convenience helper for reducers
+export const onCounterChanged = createOnAction<CounterChangeEvent>(COUNTER_ACTION.CHANGED)
+```
+
+**Step 2 — write the mapper:**
+
+```ts
+function CounterMapper(
+  _: string,
+  props: PiMapProps<CounterProps & CounterEvents>,
+  registerCard: RegisterCardF,
+): PiCardDef {
+  const plusButton = registerCard(
+    "plus",
+    Button({
+      label: "+",
+      opts: { size: "lg" },
+      // Re-map raw click into the domain action; resolve() reads the current state value
+      onClickedMapper: (_, {resolve}) => ({
+        type: COUNTER_ACTION.CHANGED,
+        value: resolve(props.value) + 1,
+      }),
+    }),
+  )
+
+  return Stack({
+    direction: "row",
+    alignItems: "center",
+    spacing: 4,
+    content: [
+      Button({
+        label: "−",
+        opts: { size: "lg" },
+        onClickedMapper: (_, {resolve}) => ({
+          type: COUNTER_ACTION.CHANGED,
+          value: resolve(props.value) - 1,
+        }),
+      }),
+      // text is a state mapper — re-evaluated on every Redux state change
+      Typography({
+        text: (_, {resolve}) => `Count: ${resolve(props.value)}`,
+        level: "h2",
+      }),
+      plusButton,
+    ],
+  })
 }
+```
 
-// Self-registering — importing this file is enough, no init() needed
+**Step 3 — register at module-load time (importing the file is enough):**
+
+```ts
 registerMetaCard({
-  type: "form/field",
-  mapper: formFieldMapper,
-  events: { onChange: "form/field/change" },
+  type: COUNTER_CARD,
+  mapper: CounterMapper,
+  events: COUNTER_ACTION,
 } satisfies PiRegisterMetaCard)
 ```
 
-```ts
-// app.pihanga.ts — app code uses it like any other card
-import {registerCard} from "@pihanga2/core"
-import {FormField} from "./form-field.metacard"  // triggers registerMetaCard
+**Using the metacard (app code):**
 
-registerCard("page/email", FormField<AppState>({
-  label: "Email",
-  value: (s) => s.form.email,
-  onChange: (state, { value }) => { state.form.email = value },
-}))
-// Expands to: page/email/label (typography) + page/email/input (input) + page/email (stack)
+```ts
+// app.pihanga.ts
+import {registerCard} from "@pihanga2/core"
+import {Counter} from "./cards/counter/counter.card"  // triggers registerMetaCard
+
+registerCard(
+  "page/counter",
+  Counter<AppState>({
+    value: (s) => s.count,
+    onChange: (state, {value}) => { state.count = value },
+  }),
+)
+// Expands to: "page/counter/plus" (button) + "page/counter" (stack with inline sub-cards)
 ```
 
 **Key rules:**
-- Always prefix sub-card names with `${name}/` to avoid collisions across instances.
-- Use card declaration helpers (`Typography(...)`, `Input(...)`) in the mapper — not raw `{cardType: "..."}` strings.
+- Use `resolve(props.xxx)` inside event mappers and sub-card state mappers — a prop may be a state mapper function rather than a plain value.
+- Sub-card names passed to `registerCard` are automatically prefixed with the metacard instance name — use short local names like `"plus"`.
+- Use card declaration helpers (`Button(...)`, `Typography(...)`) in the mapper — not raw `{cardType: "..."}` strings.
 - `props` in the concrete mapper CAN be typed more specifically than `any` (see [Metacards guide](https://ivcap-works.github.io/pihanga-core/guides/metacards/)).
 
 ### Reducers outside components

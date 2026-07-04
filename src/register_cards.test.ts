@@ -7,13 +7,21 @@
  */
 import {describe, expect, it, vi} from "vitest";
 import {
+  _registerCard,
   addCardComponent,
+  cardMappings,
   cardTypes,
   createCardDeclaration,
   isCardRef,
   memo,
+  registerMetacard,
 } from "./register_cards";
-import {ReduxState, StateMapperContext} from "./types";
+import {
+  PiRegisterReducerF,
+  ReduxState,
+  RegisterCardF,
+  StateMapperContext,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // isCardRef
@@ -147,7 +155,13 @@ function makeAppState(items: string[]): AppState {
 }
 
 function ctx(key = "card-key") {
-  return {cardName: "test-card", cardKey: key, ctxtProps: {}};
+  const c = {
+    cardName: "test-card",
+    cardKey: key,
+    ctxtProps: {},
+    resolve: (prop: any) => (typeof prop === "function" ? prop({}, c) : prop),
+  };
+  return c;
 }
 
 describe("memo", () => {
@@ -232,5 +246,94 @@ describe("memo", () => {
 
     // deep-equal → no re-computation
     expect(mapF).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// metacard metaCard tagging (CardMapping.metaCard)
+// ---------------------------------------------------------------------------
+
+describe("metacard metaCard tagging", () => {
+  // Unique IDs per test to avoid collisions in the shared module-level registries
+  const uid = () => Math.random().toString(36).slice(2);
+
+  // Minimal no-op registerReducer — returns a cancel fn, ignores all arguments
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+
+  // A stable registerCard wrapper used when calling registerMetacard()
+  const registerCardF: RegisterCardF = (name, params) =>
+    _registerCard(name, params, noopReducer);
+
+  it("sets metaCard on the top card of a metacard instance", () => {
+    const innerType = `inner-${uid()}`;
+    const metaType = `meta-${uid()}`;
+    const metaName = `instance-${uid()}`;
+
+    addCardComponent({name: innerType, component: () => null});
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, _props, _rc) => ({cardType: innerType}),
+    });
+
+    _registerCard(metaName, {cardType: metaType}, noopReducer);
+
+    const mapping = cardMappings[metaName];
+    expect(mapping).toBeDefined();
+    expect(mapping.metaCard).toEqual({name: metaName, topCard: metaName});
+  });
+
+  it("sets metaCard on sub-cards registered by the mapper", () => {
+    const innerType = `inner-${uid()}`;
+    const metaType = `meta-${uid()}`;
+    const metaName = `instance-${uid()}`;
+
+    addCardComponent({name: innerType, component: () => null});
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, _props, rc) => {
+        rc("child", {cardType: innerType});
+        return {cardType: innerType};
+      },
+    });
+
+    _registerCard(metaName, {cardType: metaType}, noopReducer);
+
+    const subMapping = cardMappings[`${metaName}/child`];
+    expect(subMapping).toBeDefined();
+    expect(subMapping.metaCard).toEqual({name: metaName, topCard: metaName});
+  });
+
+  it("metaCard.name and metaCard.topCard both equal the metacard's registered name", () => {
+    const innerType = `inner-${uid()}`;
+    const metaType = `meta-${uid()}`;
+    const metaName = `instance-${uid()}`;
+
+    addCardComponent({name: innerType, component: () => null});
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, _props, rc) => {
+        rc("a", {cardType: innerType});
+        rc("b", {cardType: innerType});
+        return {cardType: innerType};
+      },
+    });
+
+    _registerCard(metaName, {cardType: metaType}, noopReducer);
+
+    for (const key of [metaName, `${metaName}/a`, `${metaName}/b`]) {
+      expect(cardMappings[key]?.metaCard?.name).toBe(metaName);
+      expect(cardMappings[key]?.metaCard?.topCard).toBe(metaName);
+    }
+  });
+
+  it("does NOT set metaCard on ordinary (non-metacard) cards", () => {
+    const plainType = `plain-${uid()}`;
+    const plainName = `plain-instance-${uid()}`;
+
+    addCardComponent({name: plainType, component: () => null});
+    _registerCard(plainName, {cardType: plainType}, noopReducer);
+
+    expect(cardMappings[plainName]).toBeDefined();
+    expect(cardMappings[plainName].metaCard).toBeUndefined();
   });
 });

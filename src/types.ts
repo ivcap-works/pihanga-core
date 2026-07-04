@@ -227,13 +227,26 @@ export type StateMapperContext<C> = {
   cardName: string;
   cardKey?: string;
   ctxtProps: C;
+  /**
+   * When this card is a sub-card of a metacard, provides the `ctxtProps` that
+   * were passed to the metacard's top-level card by its parent. `undefined` for
+   * top-level cards or cards that are not part of a metacard.
+   *
+   * @example
+   * ```ts
+   * properties: (s, { metaCtxtProps }) => metaCtxtProps.elementData.properties,
+   * ```
+   */
+  metaCtxtProps?: any;
   ref?: RefF;
+  /** Resolve a metacard prop that may be a plain value or a StateMapper. */
+  resolve: <T>(prop: T | StateMapper<T, any, C>) => T;
 };
 
 export type PiMapProps<
   CType,
-  S extends ReduxState,
-  EType = {},
+  S extends ReduxState = ReduxState,
+  EType = object,
   C = PiDefCtxtProps,
 > = {
   [Property in keyof CType]:

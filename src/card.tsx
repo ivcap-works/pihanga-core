@@ -25,7 +25,7 @@ import {
   cardTypes,
   dispatch2registerReducer,
   framework,
-  Mapping,
+  CardMapping,
 } from "./register_cards";
 
 const logger = getLogger("card");
@@ -36,9 +36,17 @@ const logger = getLogger("card");
 
 type CompProps = {[k: string]: any};
 type CardInfo = {
-  mapping: Mapping;
+  mapping: CardMapping;
   cardType: PiRegisterComponent;
 };
+
+/**
+ * Stores the raw `CardProp` (i.e. `ctxtProps`) that was passed to the top-level
+ * card of each active metacard instance.  Written synchronously during render so
+ * sub-cards can read it in the same render cycle.  Cleaned up on unmount via a
+ * `useEffect` destructor in `GenericCard`.
+ */
+const metaCardCtxtPropsStore: {[topCardName: string]: CardProp} = {};
 
 export function Card(props: CardProp): JSX.Element {
   let cardName: string;
@@ -135,6 +143,19 @@ function GenericCard(
   info: CardInfo,
   id: number,
 ) {
+  // If this is the top card of a metacard, store its ctxtProps synchronously so
+  // sub-cards rendered in the same cycle can read metaCtxtProps from the store.
+  if (info.mapping.metaCard?.topCard === cardName) {
+    metaCardCtxtPropsStore[cardName] = props;
+  }
+
+  // Clean up the store entry when this card unmounts.
+  useEffect(() => {
+    return () => {
+      delete metaCardCtxtPropsStore[cardName];
+    };
+  }, [cardName]);
+
   const cardProps = useSelector<ReduxState, CompProps>(
     (s) => getCardProps(cardName, s, props),
     propEq,
@@ -145,11 +166,32 @@ function GenericCard(
   const dispatchWithId = (a: AnyAction) =>
     piReducer ? piReducer.dispatch(a as any) : dispatch(a);
 
+  // Build an enriched ctxtProps for event mappers that includes a resolve function.
+  // For sub-cards of a metacard, resolve substitutes metaCtxtProps as ctxtProps so
+  // state mappers authored at the metacard level see the correct context.
+  const eventMapperMetaCtxtProps =
+    info.mapping.metaCard && info.mapping.metaCard.topCard !== cardName
+      ? metaCardCtxtPropsStore[info.mapping.metaCard.topCard]
+      : undefined;
+  const eventMapperResolve = (prop: any): any => {
+    if (typeof prop !== "function") return prop;
+    const currentState = (store as any).getState();
+    const ctx = {
+      cardName,
+      cardKey: props.cardKey,
+      ctxtProps: eventMapperMetaCtxtProps ?? props,
+      metaCtxtProps: eventMapperMetaCtxtProps,
+      resolve: eventMapperResolve, // self-reference for nested resolves
+    };
+    return prop(currentState, ctx);
+  };
+  const ctxtPropsForEventMapper = {...props, resolve: eventMapperResolve};
+
   const extCardProps = appendEventHandlers(
     info,
     cardProps,
     cardName,
-    props,
+    ctxtPropsForEventMapper,
     dispatchWithId,
   );
   extCardProps._cls = cls_f(cardName, info.mapping.cardType);
@@ -169,6 +211,7 @@ function ErrorCard(el: JSX.Element) {
     (a, b) => false,
   );
   useDispatch();
+  useEffect(() => {}, []); // match GenericCard's useEffect (hook count parity)
   return el;
 }
 
@@ -198,10 +241,27 @@ function getCardProps(
   const mapping = cardMappings[cardName];
   // fetch all the usage specific props in 'rest' and pass them down
   const {cardName: _n, cardKey, parentCard: _p, children: _c, ...rest} = props;
+  // For sub-cards of a metacard, surface the top card's ctxtProps as metaCtxtProps
+  // so state mappers can access the context from where the metacard was placed.
+  const metaCtxtProps =
+    mapping.metaCard && mapping.metaCard.topCard !== cardName
+      ? metaCardCtxtPropsStore[mapping.metaCard.topCard]
+      : undefined;
   const ctxt: StateMapperContext<unknown> = {
     cardName,
     cardKey,
     ctxtProps: props,
+    metaCtxtProps,
+    // When resolving a state-mapper prop for a sub-card of a metacard, the
+    // mapper was authored expecting the *metacard's* ctxtProps (e.g. elementData).
+    // We therefore substitute metaCtxtProps as ctxtProps when calling the mapper,
+    // while still exposing the sub-card's own ctxtProps via ctxt.ctxtProps.
+    resolve: (prop: any) => {
+      if (typeof prop !== "function") return prop;
+      const resolveCtxt =
+        metaCtxtProps != null ? {...ctxt, ctxtProps: metaCtxtProps} : ctxt;
+      return prop(state, resolveCtxt);
+    },
   };
   const init: CompProps = {
     cardName,
@@ -394,19 +454,22 @@ function createCardState(): CardState {
   const reducer = (state: ReduxState) => {
     const pi = Object.values(s)
       .filter((s) => s.reportedAt > lastReport)
-      .reduce((p, s) => {
-        const cname = s.cardProps?.cardName;
-        if (!cname) {
-          logger.warn("Unexpected missing card name", s);
+      .reduce(
+        (p, s) => {
+          const cname = s.cardProps?.cardName;
+          if (!cname) {
+            logger.warn("Unexpected missing card name", s);
+            return p;
+          }
+          const name = cname;
+          const props = copySafeProps(s.cardProps || {});
+          delete props.cardName;
+          delete props._cls;
+          p[name] = props;
           return p;
-        }
-        const name = cname;
-        const props = copySafeProps(s.cardProps || {});
-        delete props.cardName;
-        delete props._cls;
-        p[name] = props;
-        return p;
-      }, {} as {[k: string]: any});
+        },
+        {} as {[k: string]: any},
+      );
     (state.pihanga ??= {}).cards = pi;
     lastReport = Date.now();
   };
@@ -439,10 +502,13 @@ function makeSafe(v: any): any {
     return v.map(makeSafe);
   }
   if (t === "object") {
-    return Object.entries(v).reduce((p, [k, v]) => {
-      p[k] = makeSafe(v);
-      return p;
-    }, {} as {[k: string]: any});
+    return Object.entries(v).reduce(
+      (p, [k, v]) => {
+        p[k] = makeSafe(v);
+        return p;
+      },
+      {} as {[k: string]: any},
+    );
   }
   logger.warn(">>> reject", v, typeof v);
   return "...";
