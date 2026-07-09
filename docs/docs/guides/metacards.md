@@ -276,6 +276,128 @@ function myMapper(name: string, props: MyMapperProps, registerCard: RegisterCard
 
 Note that each prop *may* be a **state mapper** `(s: S, ctx) => T` rather than a plain value (because `PiMapProps` permits both).  Always use `resolve(props.xxx)` inside event mappers and sub-card state mappers to handle both cases correctly.
 
+For a fully typed alternative that enforces this split at compile time, see the [Typed static / dynamic props](#typed-props) section below.
+
+---
+
+## Typed static / dynamic props { #typed-props }
+
+By default, `createCardDeclaration` allows every prop to be either a plain value **or** a `memo(...)` state-selector — the consumer decides at the call-site.  Sometimes a card author wants to **enforce** that certain props can never be a selector (they must be known at registration time, e.g. a layout mode, a link list, a display label).
+
+Three complementary tools provide this guarantee end-to-end:
+
+| Tool | Used by | Enforces |
+|---|---|---|
+| `createCardDeclaration2` | card-library author | consumers must pass **plain values** for `StaticProps`; selectors are only accepted for `DynProps` |
+| `PiMetaProps` | mapper author | mapper sees plain `T` for static props and `StateMapper<T>` for dynamic props |
+| `PiMetaResolveCtx` | mapper author | `ctx.resolve` only accepts a `StateMapper` (passing a plain value is a TS error) |
+
+### `createCardDeclaration2` — enforcing static props for consumers
+
+`createCardDeclaration2<DynProps, StaticProps, Events>` produces a declaration factory where the type split is enforced at every call-site:
+
+- **`DynProps`** → each key accepts `T` **or** `StateMapper<T>` (a `memo(...)` selector)
+- **`StaticProps`** → each key accepts **only** a plain value; passing a selector is a TypeScript error
+
+```ts title="counter.card.ts (typed declaration)"
+import {createCardDeclaration2} from "@pihanga2/core";
+
+// value must come from Redux state; label must be a fixed string
+type CounterDynProps    = { value: number };
+type CounterStaticProps = { label: string };
+type CounterEvents      = { onChange: CounterChangeEvent };
+
+export const Counter = createCardDeclaration2<
+  CounterDynProps,
+  CounterStaticProps,
+  CounterEvents
+>(COUNTER_CARD);
+
+// ✅ OK — value is a selector, label is a plain string
+Counter<AppState>({
+  value: (s) => s.count,
+  label: "Score",
+  onChange: (state, {value}) => { state.count = value },
+});
+
+// ❌ TypeScript error — label must be a plain string, not a selector
+Counter<AppState>({
+  value: (s) => s.count,
+  label: (s) => s.title,   // ← compile error
+  onChange: ...,
+});
+```
+
+The app author sees the same single `Counter(...)` call — the enforcement is invisible to the call-site shape.
+
+### `PiMetaProps` — typing the mapper function
+
+The matching type for the *mapper* side is `PiMetaProps<DynProps, StaticProps, Events>`.  It mirrors the declaration split:
+
+- `StaticProps` → the mapper receives plain `T` (calling it as a function would be a TS error)
+- `DynProps` → the mapper receives `StateMapper<T>` (it is always a selector — always use `resolve()`)
+
+```ts title="counter.card.ts (typed mapper)"
+import type {
+  PiCardDef,
+  PiMetaProps,
+  PiMetaResolveCtx,
+  RegisterCardF,
+} from "@pihanga2/core";
+
+function CounterMapper(
+  _: string,
+  props: PiMetaProps<CounterDynProps, CounterStaticProps, CounterEvents>,
+  registerCard: RegisterCardF,
+): PiCardDef {
+  // props.label is guaranteed to be a plain string — no resolve() required
+  const labelText = props.label;
+
+  // props.value is guaranteed to be a StateMapper — always use resolve()
+  return Stack({
+    content: [
+      Button({
+        label: "−",
+        onClickedMapper: (_, {resolve}: PiMetaResolveCtx) => ({
+          type: COUNTER_ACTION.CHANGED,
+          value: resolve(props.value) - 1,
+        }),
+      }),
+      Typography({
+        text: (_, {resolve}: PiMetaResolveCtx) =>
+          `${labelText}: ${resolve(props.value)}`,
+      }),
+      Button({
+        label: "+",
+        onClickedMapper: (_, {resolve}: PiMetaResolveCtx) => ({
+          type: COUNTER_ACTION.CHANGED,
+          value: resolve(props.value) + 1,
+        }),
+      }),
+    ],
+  });
+}
+```
+
+### `PiMetaResolveCtx` — narrowed resolve context
+
+`PiMetaResolveCtx` is a structurally compatible subset of `StateMapperContext` where `resolve` accepts **only** a `StateMapper` (not `T | StateMapper<T>`).  Annotate the `ctx` parameter of any sub-card prop function with it to:
+
+1. Communicate clearly that the prop will always be a selector (intent documentation).
+2. Get a compile-time error if you accidentally pass a plain value to `resolve`.
+
+```ts
+// Standard ctx — resolve accepts T | StateMapper<T>
+text: (_, ctx) => `Count: ${ctx.resolve(props.value)}`,
+
+// PiMetaResolveCtx — resolve only accepts StateMapper<T>
+text: (_, ctx: PiMetaResolveCtx) => `Count: ${ctx.resolve(props.value)}`,
+//                                    ↑ TS error if props.value is a plain value
+```
+
+!!! tip "When to use the typed variants"
+    Use `createCardDeclaration2` + `PiMetaProps` + `PiMetaResolveCtx` when a card has a clear split between *structure* (fixed at registration time — titles, layout modes, link lists) and *data* (driven by Redux state — counts, names, selections).  For simpler metacards where every prop may legitimately be dynamic, the plain `createCardDeclaration` + `PiMapProps` combination is sufficient.
+
 ---
 
 ## Common pitfalls

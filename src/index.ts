@@ -41,6 +41,8 @@ const logger = getLogger("root");
 
 export type {
   PiMapProps,
+  PiMetaProps,
+  PiMetaResolveCtx,
   PiCardDef,
   RegisterCardF,
   ReduxState,
@@ -58,7 +60,12 @@ export type {
 } from "./types";
 export {registerActions, actionTypesToEvents, createOnAction} from "./redux";
 export {Card, usePiReducer, cls_f} from "./card";
-export {memo, createCardDeclaration, isCardRef} from "./register_cards";
+export {
+  memo,
+  createCardDeclaration,
+  createCardDeclaration2,
+  isCardRef,
+} from "./register_cards";
 export {getLogger} from "./logger";
 export type {PiCardProps, PiCardRef} from "./types";
 export type {ErrorAction as RestErrorAction} from "./rest";

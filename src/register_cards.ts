@@ -292,6 +292,54 @@ export function createCardDeclaration<Props = {}, Events = {}>(
   });
 }
 
+/**
+ * Like {@link createCardDeclaration} but with an explicit split between
+ * **dynamic** props (may be state-selector functions) and **static** props
+ * (must always be plain values — selectors are rejected by TypeScript).
+ *
+ * ```
+ *  DynProps    → wrapped in PiMapProps<…> → each key accepts T | StateMapper<T>
+ *  StaticProps → passed through as-is     → each key accepts only T
+ * ```
+ *
+ * @typeParam DynProps    - Props whose values may be plain values OR `memo(...)`
+ *                          state-selector functions.
+ * @typeParam StaticProps - Props whose values must be plain values only.
+ *                          Passing a selector function here is a TypeScript error.
+ * @typeParam Events      - Event handler / mapper types (same role as in
+ *                          `createCardDeclaration`).
+ *
+ * @example
+ * ```ts
+ * type MyDynProps    = { title: string; content: PiCardRef };
+ * type MyStaticProps = { navLinks: NavLink[]; className?: string };
+ * type MyEvents      = { onSelect: { id: string } };
+ *
+ * export const MyCard = createCardDeclaration2<
+ *   MyDynProps,
+ *   MyStaticProps,
+ *   MyEvents
+ * >("pi/myCard");
+ *
+ * // ✅ OK — title can be a selector
+ * MyCard({ title: memo((s) => s.pageTitle, eq), navLinks: [] });
+ *
+ * // ❌ TypeScript error — navLinks must be a plain array
+ * MyCard({ title: "hello", navLinks: memo((s) => s.links, eq) });
+ * ```
+ */
+export function createCardDeclaration2<
+  DynProps = object,
+  StaticProps = object,
+  Events = object,
+>(
+  cardType: string,
+): <S extends ReduxState>(
+  p: StaticProps & PiMapProps<DynProps, S, Events>,
+) => PiCardDef {
+  return (p) => ({...(p as object), cardType}) as PiCardDef;
+}
+
 function processEventParameter(
   propName: string,
   value: unknown,

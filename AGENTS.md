@@ -408,7 +408,13 @@ type CounterProps  = { value: number }
 type CounterEvents = { onChange: CounterChangeEvent }
 export type CounterChangeEvent = { value: number }
 
+// Every prop may be a plain value OR a state-selector (PiMapProps permits both):
 export const Counter = createCardDeclaration<CounterProps, CounterEvents>(COUNTER_CARD)
+
+// ── OR ── enforce a static / dynamic split at the call-site:
+// type CounterDynProps    = { value: number }   // must be a selector
+// type CounterStaticProps = { label: string }   // must be a plain value
+// export const Counter = createCardDeclaration2<CounterDynProps, CounterStaticProps, CounterEvents>(COUNTER_CARD)
 
 export const COUNTER_ACTION = registerActions(COUNTER_CARD, ["changed"])
 
@@ -418,7 +424,12 @@ export const onCounterChanged = createOnAction<CounterChangeEvent>(COUNTER_ACTIO
 
 **Step 2 — write the mapper:**
 
+Use `PiMapProps<Props & Events>` when every prop may be either a plain value or a selector.
+Use `PiMetaProps<DynProps, StaticProps, Events>` when you want the mapper to enforce that static
+props are always plain values and dynamic props are always selectors — matching `createCardDeclaration2`.
+
 ```ts
+// Standard (all props may be plain or selector):
 function CounterMapper(
   _: string,
   props: PiMapProps<CounterProps & CounterEvents>,
@@ -459,6 +470,37 @@ function CounterMapper(
     ],
   })
 }
+
+// Typed variant (paired with createCardDeclaration2 in Step 1):
+// import type { PiMetaProps, PiMetaResolveCtx } from "@pihanga2/core"
+//
+// function CounterMapper(
+//   _: string,
+//   props: PiMetaProps<CounterDynProps, CounterStaticProps, CounterEvents>,
+//   registerCard: RegisterCardF,
+// ): PiCardDef {
+//   const labelText = props.label        // guaranteed plain string — no resolve() needed
+//   // props.value is guaranteed StateMapper — always use resolve()
+//   return Stack({
+//     content: [
+//       Button({
+//         label: "−",
+//         onClickedMapper: (_, {resolve}: PiMetaResolveCtx) => ({
+//           type: COUNTER_ACTION.CHANGED,
+//           value: resolve(props.value) - 1,
+//         }),
+//       }),
+//       Typography({ text: (_, {resolve}: PiMetaResolveCtx) => `${labelText}: ${resolve(props.value)}` }),
+//       Button({
+//         label: "+",
+//         onClickedMapper: (_, {resolve}: PiMetaResolveCtx) => ({
+//           type: COUNTER_ACTION.CHANGED,
+//           value: resolve(props.value) + 1,
+//         }),
+//       }),
+//     ],
+//   })
+// }
 ```
 
 **Step 3 — register at module-load time (importing the file is enough):**
@@ -493,6 +535,7 @@ registerCard(
 - Sub-card names passed to `registerCard` are automatically prefixed with the metacard instance name — use short local names like `"plus"`.
 - Use card declaration helpers (`Button(...)`, `Typography(...)`) in the mapper — not raw `{cardType: "..."}` strings.
 - `props` in the concrete mapper CAN be typed more specifically than `any` (see [Metacards guide](https://ivcap-works.github.io/pihanga-core/guides/metacards/)).
+- **Typed static / dynamic split:** use `createCardDeclaration2<DynProps, StaticProps, Events>` (call-site enforcement) together with `PiMetaProps<DynProps, StaticProps, Events>` (mapper-side enforcement) when some props must always be plain values and others must always be state selectors. Annotate `ctx` as `PiMetaResolveCtx` in sub-card prop functions to narrow `resolve` to selector-only. All three types are exported from `@pihanga2/core`.
 
 ### Reducers outside components
 

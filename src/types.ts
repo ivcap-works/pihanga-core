@@ -300,3 +300,77 @@ export type MetaCardMapperF = (
   props: any,
   registerCard: RegisterCardF,
 ) => PiCardDef;
+
+// TYPED METACARD HELPERS
+
+/**
+ * Typed props for meta-card mappers that enforce a hard separation between
+ * **static** and **dynamic** props.
+ *
+ * | Kind | Type in mapper | Allowed at call-site |
+ * |---|---|---|
+ * | `StaticProps` | plain `T` | only plain values |
+ * | `DynProps` | `StateMapper<T, S, C>` (a function) | only `memo(...)` selectors |
+ *
+ * Compared to {@link PiMapProps} — which allows every prop to be either a
+ * plain value **or** a selector — `PiMetaProps`:
+ *  - refuses a `memo(...)` for a static prop (TypeScript compile error)
+ *  - refuses a plain value for a dynamic prop (TypeScript compile error)
+ *
+ * Event handler/mapper keys are inherited from `PiMapProps<object, S, Events, C>`,
+ * since `EventHandler` and `EventMapper` are not individually exported from core.
+ *
+ * @typeParam DynProps    - Props that must be `StateMapper` selectors.
+ * @typeParam StaticProps - Props that must be plain values.
+ * @typeParam Events      - Event handler/mapper types.
+ * @typeParam S           - Redux state type (defaults to `ReduxState`).
+ * @typeParam C           - Context type (defaults to `PiDefCtxtProps`).
+ *
+ * @example
+ * ```ts
+ * type MyDynProps    = { value: number };
+ * type MyStaticProps = { label: string };
+ * type MyEvents      = { onChange: { value: number } };
+ *
+ * function MyMapper(
+ *   _: string,
+ *   props: PiMetaProps<MyDynProps, MyStaticProps, MyEvents>,
+ *   registerCard: RegisterCardF,
+ * ): PiCardDef { ... }
+ * ```
+ */
+export type PiMetaProps<
+  DynProps,
+  StaticProps = object,
+  Events = object,
+  S extends ReduxState = ReduxState,
+  C = PiDefCtxtProps,
+> = StaticProps & {
+  readonly [K in keyof DynProps]: StateMapper<DynProps[K], S, C>;
+} & PiMapProps<object, S, Events, C>;
+
+/**
+ * A narrowed resolve context for `PiMetaProps`-typed mappers.
+ *
+ * Unlike `StateMapperContext.resolve` which accepts `T | StateMapper<T>`, this
+ * variant accepts **only** `StateMapper<T>` — matching the constraint that
+ * every dynamic prop is always a selector, never a plain value.
+ *
+ * Structurally compatible with `StateMapperContext`, so it can be used as an
+ * annotation on the `ctx` parameter of a child card's prop function:
+ *
+ * ```ts
+ * Box({
+ *   content: ((_, ctx: PiMetaResolveCtx) => {
+ *     const ref = ctx.resolve(props.main); // props.main is StateMapper<PiCardRef>
+ *     return ref ? [ref] : [];
+ *   }) as unknown as PiCardRef[],
+ * })
+ * ```
+ */
+export type PiMetaResolveCtx<
+  S extends ReduxState = ReduxState,
+  C = PiDefCtxtProps,
+> = {
+  resolve: <T>(prop: StateMapper<T, S, C>) => T;
+};
