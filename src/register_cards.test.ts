@@ -7,6 +7,7 @@
  */
 import {describe, expect, it, vi} from "vitest";
 import {
+  _createCardMapping,
   _registerCard,
   addCardComponent,
   cardMappings,
@@ -335,5 +336,52 @@ describe("metacard metaCard tagging", () => {
 
     expect(cardMappings[plainName]).toBeDefined();
     expect(cardMappings[plainName].metaCard).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B1 — null prop value must not crash _createCardMapping
+// ---------------------------------------------------------------------------
+
+describe("B1 — null prop does not crash _createCardMapping", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+
+  it("stores null as a plain prop without throwing", () => {
+    const cardType = `b1-card-${uid()}`;
+    const cardName = `b1-instance-${uid()}`;
+    addCardComponent({name: cardType, component: () => null});
+
+    // Before the fix typeof null === "object" caused `.cardType` access to throw.
+    expect(() =>
+      _createCardMapping(
+        cardName,
+        {cardType, someNullProp: null} as any,
+        noopReducer,
+        {},
+      ),
+    ).not.toThrow();
+
+    // The null value should be stored as a plain prop, not treated as a card ref.
+    expect(cardMappings[cardName]).toBeDefined();
+    expect(cardMappings[cardName].props["someNullProp"]).toBeNull();
+  });
+
+  it("still registers nested card refs that are non-null objects with cardType", () => {
+    const innerType = `b1-inner-${uid()}`;
+    const outerType = `b1-outer-${uid()}`;
+    const outerName = `b1-outer-instance-${uid()}`;
+    addCardComponent({name: innerType, component: () => null});
+    addCardComponent({name: outerType, component: () => null});
+
+    _createCardMapping(
+      outerName,
+      {cardType: outerType, child: {cardType: innerType}} as any,
+      noopReducer,
+      {},
+    );
+
+    // child should have been recursively registered as a named card
+    expect(cardMappings[`${outerName}/child`]).toBeDefined();
   });
 });

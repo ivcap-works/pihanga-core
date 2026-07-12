@@ -1,4 +1,4 @@
-import React, {useEffect, useId} from "react";
+import React, {useCallback, useEffect, useId, useMemo, useRef} from "react";
 import {useDispatch, useSelector, useStore} from "react-redux";
 import equal from "deep-equal";
 
@@ -48,7 +48,9 @@ type CardInfo = {
  */
 const metaCardCtxtPropsStore: {[topCardName: string]: CardProp} = {};
 
-export function Card(props: CardProp): JSX.Element {
+// A1: memoised — Card's own props are stable strings, so React.memo prevents
+// cascade re-renders from parent components re-rendering.
+function CardImpl(props: CardProp): JSX.Element {
   let cardName: string;
 
   const [id, _] = React.useState<number>(Math.floor(Math.random() * 10000));
@@ -62,20 +64,26 @@ export function Card(props: CardProp): JSX.Element {
   }
   if (cardName === "") {
     logger.error("card name is not of type string", props.cardName);
-    return ErrorCard(
-      <div>Unknown type of cardName '{`${props.cardName}`}'</div>,
+    // A4: render as a real component so hook counts are stable in Card
+    return (
+      <ErrorCardComponent
+        content={<div>Unknown type of cardName '{`${props.cardName}`}'</div>}
+      />
     );
   }
 
   const [info, errCard] = getCardInfo(cardName);
   if (errCard) {
-    return ErrorCard(errCard);
+    return <ErrorCardComponent content={errCard} />;
   }
   if (!info) {
     throw new Error("info is empty, should never happen");
   }
-  return GenericCard(cardName, props, info, id);
+  return (
+    <GenericCardComponent cardName={cardName} ctxtProps={props} info={info} />
+  );
 }
+export const Card = React.memo(CardImpl);
 
 export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
   eventType: string,
@@ -127,8 +135,8 @@ function checkForAnonymousCard(
   const regRed = el[1];
   if (mapping) {
     // looks like we already processed it
-    // do update props if parameters have changed
-    if (mapping.parameters !== parameters) {
+    // do update props if parameters have changed (A3: use deep-equal, not identity)
+    if (!equal(mapping.parameters, parameters)) {
       _updateCardMapping(cardName, parameters, regRed, mapping);
     }
   } else {
@@ -137,82 +145,149 @@ function checkForAnonymousCard(
   return cardName;
 }
 
-function GenericCard(
-  cardName: string,
-  props: CardProp,
-  info: CardInfo,
-  id: number,
-) {
-  // If this is the top card of a metacard, store its ctxtProps synchronously so
-  // sub-cards rendered in the same cycle can read metaCtxtProps from the store.
-  if (info.mapping.metaCard?.topCard === cardName) {
-    metaCardCtxtPropsStore[cardName] = props;
-  }
+// A4: GenericCard is now a proper React component — it owns its own hook list.
+type GenericCardComponentProps = {
+  cardName: string;
+  ctxtProps: CardProp;
+  info: CardInfo;
+};
 
-  // Clean up the store entry when this card unmounts.
-  useEffect(() => {
-    return () => {
-      delete metaCardCtxtPropsStore[cardName];
-    };
-  }, [cardName]);
-
-  const cardProps = useSelector<ReduxState, CompProps>(
-    (s) => getCardProps(cardName, s, props),
-    propEq,
-  );
-  const dispatch = useDispatch();
-  const store = useStore();
-  const piReducer = (store as any).piReducer as PiReducer | undefined;
-  const dispatchWithId = (a: AnyAction) =>
-    piReducer ? piReducer.dispatch(a as any) : dispatch(a);
-
-  // Build an enriched ctxtProps for event mappers that includes a resolve function.
-  // For sub-cards of a metacard, resolve substitutes metaCtxtProps as ctxtProps so
-  // state mappers authored at the metacard level see the correct context.
-  const eventMapperMetaCtxtProps =
-    info.mapping.metaCard && info.mapping.metaCard.topCard !== cardName
-      ? metaCardCtxtPropsStore[info.mapping.metaCard.topCard]
-      : undefined;
-  const eventMapperResolve = (prop: any): any => {
-    if (typeof prop !== "function") return prop;
-    const currentState = (store as any).getState();
-    const ctx = {
-      cardName,
-      cardKey: props.cardKey,
-      ctxtProps: eventMapperMetaCtxtProps ?? props,
-      metaCtxtProps: eventMapperMetaCtxtProps,
-      resolve: eventMapperResolve, // self-reference for nested resolves
-    };
-    return prop(currentState, ctx);
-  };
-  const ctxtPropsForEventMapper = {...props, resolve: eventMapperResolve};
-
-  const extCardProps = appendEventHandlers(
-    info,
-    cardProps,
+// A2: GenericCardComponent uses React.memo with a structural comparator so that
+// re-renders from a parent are skipped when cardName, mapping, cardType, and
+// ctxtProps haven't changed.  Internally, all closures passed as card-component
+// props are stabilised with useCallback/useMemo so that downstream React.memo
+// on card components can also be effective.
+const GenericCardComponent = React.memo(
+  function GenericCardComponentImpl({
     cardName,
-    ctxtPropsForEventMapper,
-    dispatchWithId,
-  );
-  extCardProps._cls = cls_f(cardName, info.mapping.cardType);
-  return React.createElement(
-    info.cardType.component,
-    extCardProps,
-    props.children,
-  );
-}
+    ctxtProps: props,
+    info,
+  }: GenericCardComponentProps): JSX.Element {
+    // Synchronously write ctxtProps to metacard store so sub-cards rendered in
+    // the same cycle can read it.
+    if (info.mapping.metaCard?.topCard === cardName) {
+      metaCardCtxtPropsStore[cardName] = props;
+    }
 
-const EmptyCompProps = {} as CompProps;
+    // A2: refs to latest values so stable closures read fresh data at call time.
+    const propsRef = useRef(props);
+    propsRef.current = props;
 
-function ErrorCard(el: JSX.Element) {
-  // Note: call the EXACT same hooks as 'GenericCard'
-  useSelector<ReduxState, CompProps>(
-    (s) => EmptyCompProps,
-    (a, b) => false,
-  );
-  useDispatch();
-  useEffect(() => {}, []); // match GenericCard's useEffect (hook count parity)
-  return el;
+    const metaCtxtPropsRef = useRef<CardProp | undefined>(undefined);
+    // ctxtPropsRef holds the latest {...props, resolve} for event mappers.
+    const ctxtPropsRef = useRef<any>({});
+
+    // Clean up the metacard store entry on unmount.
+    useEffect(() => {
+      return () => {
+        delete metaCardCtxtPropsStore[cardName];
+      };
+    }, [cardName]);
+
+    const cardProps = useSelector<ReduxState, CompProps>(
+      (s) => getCardProps(cardName, s, props),
+      propEq,
+    );
+    const dispatch = useDispatch();
+    const store = useStore();
+    const piReducer = (store as any).piReducer as PiReducer | undefined;
+
+    // A2: stable dispatchWithId — both piReducer and dispatch are stable after mount.
+    const dispatchWithId = useCallback(
+      (a: AnyAction) =>
+        piReducer ? piReducer.dispatch(a as any) : dispatch(a),
+      [piReducer, dispatch],
+    );
+
+    // A2: stable eventMapperResolve — reads from refs, never needs to be recreated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const eventMapperResolve = useCallback(
+      (prop: any): any => {
+        if (typeof prop !== "function") return prop;
+        const currentState = (store as any).getState();
+        const currentMeta = metaCtxtPropsRef.current;
+        const ctx = {
+          cardName,
+          cardKey: propsRef.current.cardKey,
+          ctxtProps: currentMeta ?? propsRef.current,
+          metaCtxtProps: currentMeta,
+          resolve: eventMapperResolve, // self-ref is safe: JS closure captures the var
+        };
+        return prop(currentState, ctx);
+      },
+      [cardName, store],
+    ); // stable: cardName is fixed; store never changes
+
+    // Update refs with latest render values (regular statements between hooks).
+    const eventMapperMetaCtxtProps =
+      info.mapping.metaCard && info.mapping.metaCard.topCard !== cardName
+        ? metaCardCtxtPropsStore[info.mapping.metaCard.topCard]
+        : undefined;
+    metaCtxtPropsRef.current = eventMapperMetaCtxtProps;
+    ctxtPropsRef.current = {...props, resolve: eventMapperResolve};
+
+    // A2: memoised event handlers — rebuilt only when mapping or dispatch changes.
+    // Handlers close over ctxtPropsRef so they always read the latest context
+    // without themselves needing to be recreated.
+    const eventHandlers = useMemo((): CompProps => {
+      const events = info.cardType?.events;
+      const result: CompProps = {_dispatch: dispatchWithId};
+      if (!events) return result;
+      const {eventMappers} = info.mapping;
+      Object.entries(events).forEach(([evName, actionType]) => {
+        const m = eventMappers[evName];
+        if (m) {
+          logger.debug("setup mapper", cardName);
+          result[evName] = (a: AnyAction) => {
+            a.cardID = cardName;
+            const a2 = m(a, ctxtPropsRef.current);
+            if (a2) dispatchWithId(a2);
+          };
+        } else {
+          result[evName] = (a: AnyAction) => {
+            a.type = actionType;
+            a.cardID = cardName;
+            dispatchWithId(a);
+          };
+        }
+      });
+      return result;
+      // info.mapping.eventMappers is a new object identity whenever the mapping
+      // is updated, so this correctly invalidates when props/events change.
+    }, [cardName, info.mapping.eventMappers, info.cardType, dispatchWithId]);
+
+    // A2: stable _cls — pure function of two stable strings.
+    const cls = useMemo(
+      () => cls_f(cardName, info.mapping.cardType),
+      [cardName, info.mapping.cardType],
+    );
+
+    RegisterCardState.props(cardName, cardProps, dispatch);
+
+    const extCardProps: CompProps = {...cardProps, ...eventHandlers, _cls: cls};
+    return React.createElement(
+      info.cardType.component,
+      extCardProps,
+      props.children,
+    );
+  },
+  // Custom equality: info is rebuilt as a new object each render but its
+  // mapping and cardType fields are stable module-level references.
+  (prev, next) =>
+    prev.cardName === next.cardName &&
+    prev.info.mapping === next.info.mapping &&
+    prev.info.cardType === next.info.cardType &&
+    prev.ctxtProps === next.ctxtProps,
+);
+
+// A4: ErrorCard is now a proper React component — no parity hack needed.
+// It has no useSelector subscription so it never re-renders due to store dispatches.
+type ErrorCardComponentProps = {
+  content: JSX.Element;
+};
+
+function ErrorCardComponent({content}: ErrorCardComponentProps): JSX.Element {
+  return content;
 }
 
 function getCardInfo(cardName: string): [CardInfo?, JSX.Element?] {
@@ -322,44 +397,6 @@ function propEq(oldP: CompProps, newP: CompProps): boolean {
   // }
   RegisterCardState.changed(newP.cardName, isUnchanged, newP);
   return isUnchanged;
-}
-
-function appendEventHandlers(
-  info: CardInfo,
-  cardProps: CompProps,
-  cardName: string,
-  ctxtProps: CardProp,
-  dispatch: (a: AnyAction) => any,
-): CompProps {
-  RegisterCardState.props(cardName, cardProps, dispatch);
-  const cp: CompProps = {
-    ...cardProps,
-    _dispatch: (a: AnyAction) => dispatch(a),
-  };
-
-  const events = info.cardType?.events;
-  if (!events) {
-    return cp;
-  }
-  const eventMappers = info.mapping.eventMappers;
-  Object.entries(events).forEach(([name, actionType]) => {
-    const m = eventMappers[name];
-    if (m) {
-      logger.debug("setup mapper", cardName);
-      cp[name] = (a: AnyAction) => {
-        a.cardID = cardName;
-        const a2 = m(a, ctxtProps);
-        if (a2) dispatch(a2);
-      };
-    } else {
-      cp[name] = (a: AnyAction) => {
-        a.type = actionType;
-        a.cardID = cardName;
-        dispatch(a);
-      };
-    }
-  });
-  return cp;
 }
 
 function renderUnknownCard(cardName: string): JSX.Element {

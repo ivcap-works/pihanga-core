@@ -178,12 +178,11 @@ export function _createCardMapping(
 
   Object.entries(parameters).forEach(([k, v]) => {
     if (k === "cardType") return;
-    if (typeof v === "object") {
-      const cd = v as PiCardDef; // speculative
-      if (cd.cardType) {
-        const cardName = `${name}/${k}`;
-        v = _registerCard(cardName, cd, registerReducer);
-      }
+    if (isCardRef(v)) {
+      // B1: use isCardRef (which guards against null) instead of raw typeof check
+      const cd = v as PiCardDef;
+      const cardName = `${name}/${k}`;
+      v = _registerCard(cardName, cd, registerReducer);
     }
     if (
       k.startsWith("on") &&
@@ -206,6 +205,7 @@ export function _createCardMapping(
     // we had issues with meta cards and card types
     cm.props = props;
     cm.eventMappers = eventMappers;
+    cm.parameters = parameters; // A3: persist so identity/deep-equal check in checkForAnonymousCard can short-circuit
   } else {
     cardMappings[name] = {
       cardType: parameters.cardType,
