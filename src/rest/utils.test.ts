@@ -238,4 +238,40 @@ describe("parseResponse", () => {
 
     expect(originalResponse).toBe(response);
   });
+
+  // B2 — mime parameters must not prevent content-type matching
+  it("B2: parses 'application/json; charset=utf-8' as JSON (not blob)", async () => {
+    const body = {id: 1, name: "test"};
+    const response = new Response(JSON.stringify(body), {
+      headers: {"content-type": "application/json; charset=utf-8"},
+    });
+
+    const [content, contentType] = await parseResponse(response);
+
+    expect(contentType).toBe(RestContentType.Object);
+    expect(content).toEqual(body);
+  });
+
+  it("B2: parses 'text/html; charset=utf-8' as text (not blob)", async () => {
+    const html = "<p>hello</p>";
+    const response = new Response(html, {
+      headers: {"content-type": "text/html; charset=utf-8"},
+    });
+
+    const [content, contentType] = await parseResponse(response);
+
+    expect(contentType).toBe(RestContentType.Text);
+    expect(content).toBe(html);
+  });
+
+  it("B2: preserves the full original MIME string (with params) as the mimeType tuple element", async () => {
+    const fullMime = "application/json; charset=utf-8";
+    const response = new Response("{}", {
+      headers: {"content-type": fullMime},
+    });
+
+    const [, , mimeType] = await parseResponse(response);
+
+    expect(mimeType).toBe(fullMime);
+  });
 });

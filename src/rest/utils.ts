@@ -17,7 +17,10 @@ export function parseResponse(
 ): Promise<[any, RestContentType, string, Response]> {
   const mimeType = response.headers.get("content-type");
   if (mimeType) {
-    switch (mimeType) {
+    // B2: strip parameters (e.g. "; charset=utf-8") before matching so that
+    // "application/json; charset=utf-8" is correctly parsed as JSON.
+    const baseMime = mimeType.split(";")[0].trim();
+    switch (baseMime) {
       case "application/json":
         return response
           .json()
@@ -27,7 +30,7 @@ export function parseResponse(
           .text()
           .then((t) => [t, RestContentType.Text, mimeType, response]);
       default:
-        if (mimeType.startsWith("text")) {
+        if (baseMime.startsWith("text")) {
           return response
             .text()
             .then((t) => [t, RestContentType.Text, mimeType, response]);
@@ -191,7 +194,19 @@ export function registerCommon<
           dispatch(a);
         }
       })
-      .catch((error) => console.log("_fetch", error));
+      // B3: network-level failures (DNS, CORS, offline) must dispatch an action
+      // so that error handlers and UI spinners are notified instead of hanging.
+      .catch((fetchError: unknown) => {
+        dispatch({
+          type: intErrorType,
+          error:
+            fetchError instanceof Error
+              ? fetchError.message
+              : String(fetchError),
+          call: name,
+          action,
+        });
+      });
     return state;
   }
 

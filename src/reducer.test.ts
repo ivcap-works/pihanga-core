@@ -455,3 +455,82 @@ describe("createReducer – dispatchPipe", () => {
     expect(onReply).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// B5 — reducer registered during reduction is not lost
+// ---------------------------------------------------------------------------
+
+describe("B5 — reducer added inside a handler survives the reduction", () => {
+  it("a multi-fire reducer registered by a handler is present on the next dispatch", () => {
+    const {reducer, piReducer} = setup();
+    let secondFired = 0;
+
+    // On the first "TRIGGER", register a new reducer for the same type.
+    piReducer.register(
+      "B5_TRIGGER",
+      () => {
+        piReducer.register(
+          "B5_TRIGGER",
+          () => {
+            secondFired++;
+          },
+          0,
+          "b5-second",
+        );
+      },
+      0,
+      "b5-first",
+    );
+
+    dispatch(reducer, {type: "B5_TRIGGER"}); // b5-first runs, registers b5-second
+    dispatch(reducer, {type: "B5_TRIGGER"}); // b5-first + b5-second should both run
+    expect(secondFired).toBeGreaterThan(0); // b5-second was NOT clobbered
+  });
+
+  it("a one-shot reducer registered during reduction fires on the next dispatch", () => {
+    const {reducer, piReducer} = setup();
+    let onceFired = false;
+
+    piReducer.register(
+      "B5_ONESHOT",
+      () => {
+        piReducer.registerOneShot("B5_ONESHOT", () => {
+          onceFired = true;
+          return true; // consumed
+        });
+      },
+      0,
+      "b5-trigger",
+    );
+
+    dispatch(reducer, {type: "B5_ONESHOT"}); // registers the one-shot
+    dispatch(reducer, {type: "B5_ONESHOT"}); // one-shot fires
+    expect(onceFired).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B6 — auto-keyed reducers deduplicate and return a working cancel function
+// ---------------------------------------------------------------------------
+
+describe("B6 — auto-keyed reducers (no explicit key)", () => {
+  // Note: stack-trace-based deduplication of truly auto-keyed registrations
+  // is environment-dependent (StackTrace.getSync heuristics). The primary
+  // observable fix of B6 is that the cancel function returned for an
+  // auto-keyed reducer is functional (previously always returned nonCancelF).
+
+  it("cancel function returned for auto-keyed reducer actually removes it", () => {
+    const {reducer, piReducer} = setup();
+    const handler = vi.fn();
+
+    // Register without an explicit key — previously returned nonCancelF.
+    const cancel = piReducer.register("B6_CANCEL", handler);
+
+    dispatch(reducer, {type: "B6_CANCEL"});
+    expect(handler).toHaveBeenCalledOnce();
+
+    cancel(); // B6 fix: this should now remove the reducer
+    dispatch(reducer, {type: "B6_CANCEL"});
+    expect(handler).toHaveBeenCalledOnce(); // still only 1 — cancel worked
+  });
+});

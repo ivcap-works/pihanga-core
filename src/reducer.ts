@@ -238,12 +238,24 @@ export function createReducer(
       }
       draft.pihanga.reducers = [];
       if (ra) {
-        const rout = _reduce(ra, draft, action, delayedDispatcher, opts);
-        mappings[action.type] = rout;
+        // B5: _reduce returns only the keys of consumed one-shots; we remove
+        // them from the LIVE mapping so any reducers added during the loop
+        // (e.g. by dispatchPipe or by a handler that calls piReducer.register)
+        // are not clobbered by a wholesale array replacement.
+        const consumed = _reduce(ra, draft, action, delayedDispatcher, opts);
+        if (consumed.length > 0) {
+          mappings[action.type] = (mappings[action.type] || []).filter(
+            (m) => !m.key || !consumed.includes(m.key),
+          );
+        }
       }
       if (rany) {
-        const rout2 = _reduce(rany, draft, action, delayedDispatcher, opts);
-        mappings["*"] = rout2;
+        const consumed2 = _reduce(rany, draft, action, delayedDispatcher, opts);
+        if (consumed2.length > 0) {
+          mappings["*"] = (mappings["*"] || []).filter(
+            (m) => !m.key || !consumed2.includes(m.key),
+          );
+        }
       }
       return;
     });
@@ -286,24 +298,27 @@ export function createReducer(
     eventType: string,
     reducerDef: ReducerDef<S, A>,
   ): PiReducerCancelF {
-    let m = mappings[eventType] || [];
-    const key = reducerDef.key;
-    m = removeReducer(key, m);
-    m.push(reducerDef as any as ReducerDef<ReduxState, Action<any>>); // keep typing happy
-    m.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    mappings[eventType] = m;
-
+    // B6: assign the fallback stack-trace key FIRST so that deduplication
+    // (removeReducer) and the cancel closure both use the final key value.
+    // Previously `key` was captured before this block ran, so auto-keyed
+    // registrations always returned nonCancelF and never deduped.
     if (!reducerDef.key) {
       const frames = StackTrace.getSync();
       const sf = _get_source_frame(frames);
       if (sf) {
-        // reducerDef.definedIn = sf;
         reducerDef.key = sf.toString();
       } else {
         reducerDef.definedIn = sf;
         console.log(">> cannot find source frame", eventType, frames);
       }
     }
+
+    const key = reducerDef.key;
+    let m = mappings[eventType] || [];
+    m = removeReducer(key, m);
+    m.push(reducerDef as any as ReducerDef<ReduxState, Action<any>>); // keep typing happy
+    m.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    mappings[eventType] = m;
 
     return key
       ? () => {
@@ -338,35 +353,35 @@ function removeReducer(
   }
 }
 
+// B5: returns the keys of consumed one-shot reducers (not the survivors).
+// The caller removes those keys from the LIVE mapping so any reducers
+// registered during the loop are not clobbered by a wholesale replacement.
 function _reduce(
   ra: ReducerDef<ReduxState, Action>[],
   draft: ReduxState,
   action: Action,
   delayedDispatcher: DispatchF,
   opts: ReduceOpts<ReduxState>,
-): ReducerDef<ReduxState, Action<any>>[] {
-  const rout: ReducerDef<ReduxState, Action<any>>[] = [];
+): string[] {
+  const consumed: string[] = [];
   ra.forEach((m) => {
     try {
-      // if (m.definedIn || m.key) {
-      //   console.log(">>> executing reducer", action.type, m.key, m.definedIn);
-      // }
       if (m.mapperMulti) {
         draft.pihanga?.reducers?.push(m.definedIn || m.key || "unknown");
         m.mapperMulti(draft, action, delayedDispatcher, opts);
-        rout.push(m);
+        // multi-fire: keep in mapping — nothing to record
       } else if (m.mapperOnce) {
         draft.pihanga?.reducers?.push(m.definedIn || m.key || "unknown");
-        const flag = m.mapperOnce(draft, action, delayedDispatcher, opts);
-        if (!flag) {
-          rout.push(m);
+        const done = m.mapperOnce(draft, action, delayedDispatcher, opts);
+        if (done && m.key) {
+          consumed.push(m.key); // consumed → will be filtered out by caller
         }
       }
     } catch (err: any) {
       logger.error(err.message, m.definedIn);
     }
   });
-  return rout;
+  return consumed;
 }
 
 function _get_source_frame(
