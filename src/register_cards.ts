@@ -200,13 +200,21 @@ export function _createCardMapping(
     }
     props[k] = v;
   });
-  cardMappings[name] = {
-    cardType: parameters.cardType,
-    props,
-    eventMappers,
-    cardEvents,
-    parameters,
-  };
+  const cm = cardMappings[name];
+  if (cm) {
+    // if mapping exists, only change what really changed.
+    // we had issues with meta cards and card types
+    cm.props = props;
+    cm.eventMappers = eventMappers;
+  } else {
+    cardMappings[name] = {
+      cardType: parameters.cardType,
+      props,
+      eventMappers,
+      cardEvents,
+      parameters,
+    };
+  }
 }
 
 export function _updateCardMapping(
