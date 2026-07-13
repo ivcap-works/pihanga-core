@@ -1,5 +1,5 @@
-import {current} from "immer";
-import {DispatchF, PiReducer, ReduxAction, ReduxState} from "../types";
+import { current } from "immer";
+import { DispatchF, PiReducer, ReduxAction, ReduxState } from "../types";
 import {
   ACTION_TYPES,
   Bindings,
@@ -10,7 +10,7 @@ import {
   RegisterGenericProps,
   ResultAction,
 } from "./types";
-import {RestContentType} from "./enums";
+import { RestContentType } from "./enums";
 
 export function parseResponse(
   response: Response,
@@ -26,9 +26,7 @@ export function parseResponse(
           .json()
           .then((j) => [j, RestContentType.Object, mimeType, response]);
       case "application/jose":
-        return response
-          .text()
-          .then((t) => [t, RestContentType.Text, mimeType, response]);
+        return response.text().then((t) => [t, RestContentType.Text, mimeType, response]);
       default:
         if (baseMime.startsWith("text")) {
           return response
@@ -75,12 +73,7 @@ export type RequestF<S extends ReduxState, A extends ReduxAction> = (
   action: A,
 ) => [RequestInit, Bindings];
 
-export function registerCommon<
-  S extends ReduxState,
-  A extends ReduxAction,
-  R,
-  C = any,
->(
+export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C = any>(
   reducer: PiReducer,
   props: RegisterGenericProps<S, A, R, C>,
   requestF: RequestF<S, A>,
@@ -114,29 +107,26 @@ export function registerCommon<
     throw Error('Missing "reply"');
   }
 
-  reducer.register<S, A>(
-    trigger,
-    (state: S, action: A, dispatch: DispatchF) => {
-      const ctxtP = context ? context(action, state) : null;
-      if (ctxtP) {
-        const s = current(state); // need current state as we are going throuygh a promise
-        ctxtP
-          .then((ctxt) => handleEvent(s, action, dispatch, ctxt))
-          .catch((err) => {
-            const a: ContextErrorAction = {
-              type: ACTION_TYPES.CONTEXT_ERROR,
-              error: err.toString(),
-              pendingAction: action,
-            };
-            dispatch(a);
-          });
-      } else {
-        // we should remove state as argument
-        handleEvent(state, action, dispatch, {} as any);
-      }
-      return state;
-    },
-  );
+  reducer.register<S, A>(trigger, (state: S, action: A, dispatch: DispatchF) => {
+    const ctxtP = context ? context(action, state) : null;
+    if (ctxtP) {
+      const s = current(state); // need current state as we are going throuygh a promise
+      ctxtP
+        .then((ctxt) => handleEvent(s, action, dispatch, ctxt))
+        .catch((err) => {
+          const a: ContextErrorAction = {
+            type: ACTION_TYPES.CONTEXT_ERROR,
+            error: err.toString(),
+            pendingAction: action,
+          };
+          dispatch(a);
+        });
+    } else {
+      // we should remove state as argument
+      handleEvent(state, action, dispatch, {} as any);
+    }
+    return state;
+  });
 
   function handleEvent(state: S, action: A, dispatch: DispatchF, ctxt: C): S {
     if (guard) {
@@ -151,7 +141,7 @@ export function registerCommon<
       [request, bindings] = requestF(state, action);
       if (headers) {
         const h = headers(action, state, ctxt);
-        request.headers = request.headers ? {...request.headers, ...h} : h;
+        request.headers = request.headers ? { ...request.headers, ...h } : h;
       }
       let o: string;
       if (typeof origin === "function") {
@@ -199,10 +189,7 @@ export function registerCommon<
       .catch((fetchError: unknown) => {
         dispatch({
           type: intErrorType,
-          error:
-            fetchError instanceof Error
-              ? fetchError.message
-              : String(fetchError),
+          error: fetchError instanceof Error ? fetchError.message : String(fetchError),
           call: name,
           action,
         });
@@ -215,12 +202,9 @@ export function registerCommon<
   });
 
   if (error) {
-    reducer.register<S, ErrorAction<A>>(
-      errorType,
-      (state, action, dispatch) => {
-        return error(state, action, action.request, dispatch);
-      },
-    );
+    reducer.register<S, ErrorAction<A>>(errorType, (state, action, dispatch) => {
+      return error(state, action, action.request, dispatch);
+    });
   }
 }
 
@@ -280,7 +264,9 @@ function _fetch(url: URL, request: RequestInit): Promise<HttpResponse> {
         contentType,
         mimeType,
         size: getSize(response),
-        headers: response.headers,
+        // B8: convert to a plain object so the action is serialisable;
+        // previously stored the WHATWG Headers instance directly.
+        headers: Object.fromEntries(response.headers.entries()),
       };
     });
 }

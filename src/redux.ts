@@ -1,8 +1,8 @@
-import {PiRegister} from ".";
-import {pihanga as logger} from "./logger";
-import {CardAction, ReduceF, ReduxState} from "./types";
+import { PiRegister } from ".";
+import { pihanga as logger } from "./logger";
+import { CardAction, ReduceF, ReduxState } from "./types";
 
-const ns2Actions: {[k: string]: boolean} = {};
+const ns2Actions: { [k: string]: boolean } = {};
 
 /**
  * Register a set of actions for a particular namespace.
@@ -19,7 +19,7 @@ const ns2Actions: {[k: string]: boolean} = {};
 export function registerActions<T extends string>(
   namespace: string,
   actions: readonly T[],
-): {[S in Uppercase<T>]: string} {
+): { [S in Uppercase<T>]: string } {
   if (ns2Actions[namespace]) {
     logger.warn(`Overwriting action namespace  "${namespace}"`);
   }
@@ -29,10 +29,10 @@ export function registerActions<T extends string>(
   });
   logger.info(`Register action ns "${namespace}"`);
   ns2Actions[namespace] = true;
-  return ah as {[S in Uppercase<T>]: string};
+  return ah as { [S in Uppercase<T>]: string };
 }
 
-export function actionTypesToEvents(actionTypes: {[k: string]: string}): {
+export function actionTypesToEvents(actionTypes: { [k: string]: string }): {
   [k: string]: string;
 } {
   return Object.entries(actionTypes).reduce(
@@ -45,7 +45,7 @@ export function actionTypesToEvents(actionTypes: {[k: string]: string}): {
       p[`on${n}`] = v;
       return p;
     },
-    {} as {[k: string]: string},
+    {} as { [k: string]: string },
   );
 }
 
@@ -85,10 +85,7 @@ export function actionTypesToEvents(actionTypes: {[k: string]: string}): {
  */
 export function createOnAction<E>(
   actionType: string,
-): <S extends ReduxState>(
-  register: PiRegister,
-  f: ReduceF<S, CardAction & E>,
-) => void {
+): <S extends ReduxState>(register: PiRegister, f: ReduceF<S, CardAction & E>) => void {
   return (register, f) => {
     register.reducer.register(actionType, f);
   };

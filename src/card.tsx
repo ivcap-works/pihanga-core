@@ -1,13 +1,14 @@
-import React, {useCallback, useEffect, useId, useMemo, useRef} from "react";
-import {useDispatch, useSelector, useStore} from "react-redux";
+import React, { useCallback, useEffect, useId, useMemo, useRef } from "react";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import equal from "fast-deep-equal";
 
-import {getLogger} from "./logger";
+import { getLogger } from "./logger";
 import {
   CSSModuleClasses,
   CardProp,
   PiCardDef,
   PiReducer,
+  PiStore,
   PiRegisterComponent,
   PiRegisterReducerF,
   ReduceF,
@@ -16,15 +17,14 @@ import {
   StateMapper,
   StateMapperContext,
 } from "./types";
-import {Action, AnyAction, Dispatch} from "@reduxjs/toolkit";
+import { Action, AnyAction, Dispatch } from "@reduxjs/toolkit";
 import {
   _createCardMapping,
   _updateCardMapping,
   _registerCard,
   cardMappings,
-  cardTypes,
+  resolveCardType,
   dispatch2registerReducer,
-  framework,
   CardMapping,
 } from "./register_cards";
 
@@ -34,7 +34,7 @@ const logger = getLogger("card");
 //   cardName: PiCardRef
 // } & { [k: string]: any }
 
-type CompProps = {[k: string]: any};
+type CompProps = { [k: string]: any };
 type CardInfo = {
   mapping: CardMapping;
   cardType: PiRegisterComponent;
@@ -46,7 +46,7 @@ type CardInfo = {
  * sub-cards can read it in the same render cycle.  Cleaned up on unmount via a
  * `useEffect` destructor in `GenericCard`.
  */
-const metaCardCtxtPropsStore: {[topCardName: string]: CardProp} = {};
+const metaCardCtxtPropsStore: { [topCardName: string]: CardProp } = {};
 
 // A1: memoised — Card's own props are stable strings, so React.memo prevents
 // cascade re-renders from parent components re-rendering.
@@ -93,9 +93,7 @@ function CardImpl(props: CardProp): JSX.Element {
   if (!info) {
     throw new Error("info is empty, should never happen");
   }
-  return (
-    <GenericCardComponent cardName={cardName} ctxtProps={props} info={info} />
-  );
+  return <GenericCardComponent cardName={cardName} ctxtProps={props} info={info} />;
 }
 export const Card = React.memo(CardImpl);
 
@@ -114,7 +112,7 @@ export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
   mapperRef.current = mapper;
 
   useEffect(() => {
-    const r = (store as any).piReducer as PiReducer;
+    const r = (store as unknown as PiStore).piReducer; // C8: typed via PiStore
     // Wrap in a stable closure that always reads the latest mapper from the ref.
     return r.register(
       eventType,
@@ -214,12 +212,11 @@ const GenericCardComponent = React.memo(
     );
     const dispatch = useDispatch();
     const store = useStore();
-    const piReducer = (store as any).piReducer as PiReducer | undefined;
+    const piReducer = (store as unknown as Partial<PiStore>).piReducer; // C8
 
     // A2: stable dispatchWithId — both piReducer and dispatch are stable after mount.
     const dispatchWithId = useCallback(
-      (a: AnyAction) =>
-        piReducer ? piReducer.dispatch(a as any) : dispatch(a),
+      (a: AnyAction) => (piReducer ? piReducer.dispatch(a as any) : dispatch(a)),
       [piReducer, dispatch],
     );
 
@@ -248,16 +245,16 @@ const GenericCardComponent = React.memo(
         ? metaCardCtxtPropsStore[info.mapping.metaCard.topCard]
         : undefined;
     metaCtxtPropsRef.current = eventMapperMetaCtxtProps;
-    ctxtPropsRef.current = {...props, resolve: eventMapperResolve};
+    ctxtPropsRef.current = { ...props, resolve: eventMapperResolve };
 
     // A2: memoised event handlers — rebuilt only when mapping or dispatch changes.
     // Handlers close over ctxtPropsRef so they always read the latest context
     // without themselves needing to be recreated.
     const eventHandlers = useMemo((): CompProps => {
       const events = info.cardType?.events;
-      const result: CompProps = {_dispatch: dispatchWithId};
+      const result: CompProps = { _dispatch: dispatchWithId };
       if (!events) return result;
-      const {eventMappers} = info.mapping;
+      const { eventMappers } = info.mapping;
       Object.entries(events).forEach(([evName, actionType]) => {
         const m = eventMappers[evName];
         if (m) {
@@ -297,12 +294,8 @@ const GenericCardComponent = React.memo(
       prevCardPropsRef.current = cardProps;
     }); // intentionally no dep array: runs after every render, mirrors propEq cadence
 
-    const extCardProps: CompProps = {...cardProps, ...eventHandlers, _cls: cls};
-    return React.createElement(
-      info.cardType.component,
-      extCardProps,
-      props.children,
-    );
+    const extCardProps: CompProps = { ...cardProps, ...eventHandlers, _cls: cls };
+    return React.createElement(info.cardType.component, extCardProps, props.children);
   },
   // Custom equality: info is rebuilt as a new object each render but its
   // mapping and cardType fields are stable module-level references.
@@ -319,7 +312,7 @@ type ErrorCardComponentProps = {
   content: JSX.Element;
 };
 
-function ErrorCardComponent({content}: ErrorCardComponentProps): JSX.Element {
+function ErrorCardComponent({ content }: ErrorCardComponentProps): JSX.Element {
   return content;
 }
 
@@ -328,27 +321,19 @@ function getCardInfo(cardName: string): [CardInfo?, JSX.Element?] {
   if (!mapping) {
     return [undefined, renderUnknownCard(cardName)];
   }
-  let cardType = cardTypes[mapping.cardType];
+  // C6: resolveCardType centralises the framework-fallback lookup
+  const cardType = resolveCardType(mapping.cardType);
   if (!cardType) {
-    if (framework) {
-      cardType = cardTypes[`${framework}/${mapping.cardType}`];
-    }
-    if (!cardType) {
-      return [undefined, renderUnknownCardType(mapping.cardType)];
-    }
+    return [undefined, renderUnknownCardType(mapping.cardType)];
   }
-  const info = {mapping, cardType};
+  const info = { mapping, cardType };
   return [info, undefined];
 }
 
-function getCardProps(
-  cardName: string,
-  state: ReduxState,
-  props: CardProp,
-): CompProps {
+function getCardProps(cardName: string, state: ReduxState, props: CardProp): CompProps {
   const mapping = cardMappings[cardName];
   // fetch all the usage specific props in 'rest' and pass them down
-  const {cardName: _n, cardKey, parentCard: _p, children: _c, ...rest} = props;
+  const { cardName: _n, cardKey, parentCard: _p, children: _c, ...rest } = props;
   // For sub-cards of a metacard, surface the top card's ctxtProps as metaCtxtProps
   // so state mappers can access the context from where the metacard was placed.
   const metaCtxtProps =
@@ -367,7 +352,7 @@ function getCardProps(
     resolve: (prop: any) => {
       if (typeof prop !== "function") return prop;
       const resolveCtxt =
-        metaCtxtProps != null ? {...ctxt, ctxtProps: metaCtxtProps} : ctxt;
+        metaCtxtProps != null ? { ...ctxt, ctxtProps: metaCtxtProps } : ctxt;
       return prop(state, resolveCtxt);
     },
   };
@@ -456,7 +441,7 @@ function createCardState(): CardState {
     changedAt: number;
     reportedAt: number;
   };
-  const s: {[name: string]: S} = {};
+  const s: { [name: string]: S } = {};
   let dispatch: (a: AnyAction) => any;
   let timer: number;
   let lastReport = 0;
@@ -488,12 +473,10 @@ function createCardState(): CardState {
     }
     timer = window.setTimeout(() => {
       if (dispatch) {
-        const changed = Object.values(s).filter(
-          (s) => s.changedAt > lastReport,
-        );
+        const changed = Object.values(s).filter((s) => s.changedAt > lastReport);
         if (changed.length > 0) {
           clearTimeout(timer); // just in case
-          dispatch({type: UPDATE_STATE_ACTION});
+          dispatch({ type: UPDATE_STATE_ACTION });
         }
       }
     }, 1000);
@@ -508,11 +491,7 @@ function createCardState(): CardState {
     e.cardProps = cardProps;
     dispatch = _dispatch;
   };
-  const changed = (
-    cardName: string,
-    isUnchanged: boolean,
-    _props: CompProps,
-  ) => {
+  const changed = (cardName: string, isUnchanged: boolean, _props: CompProps) => {
     if (!enabled) {
       // A9: still log the debug line when not suppressed by the flag; omit
       // the state-tracking overhead (getS, timer reset) entirely.
@@ -547,12 +526,12 @@ function createCardState(): CardState {
           p[name] = props;
           return p;
         },
-        {} as {[k: string]: any},
+        {} as { [k: string]: any },
       );
     (state.pihanga ??= {}).cards = pi;
     lastReport = Date.now();
   };
-  return {props, changed, reducer, setEnabled};
+  return { props, changed, reducer, setEnabled };
 }
 
 function copySafeProps(props: CompProps): CompProps {
@@ -566,12 +545,7 @@ function copySafeProps(props: CompProps): CompProps {
 
 function makeSafe(v: any): any {
   const t = typeof v;
-  if (
-    t === "undefined" ||
-    t === "string" ||
-    t === "boolean" ||
-    t === "number"
-  ) {
+  if (t === "undefined" || t === "string" || t === "boolean" || t === "number") {
     return v;
   }
   if (t === "function") {
@@ -586,7 +560,7 @@ function makeSafe(v: any): any {
         p[k] = makeSafe(v);
         return p;
       },
-      {} as {[k: string]: any},
+      {} as { [k: string]: any },
     );
   }
   logger.warn(">>> reject", v, typeof v);

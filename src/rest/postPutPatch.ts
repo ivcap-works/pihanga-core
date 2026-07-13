@@ -1,25 +1,40 @@
-import {PiReducer, ReduxAction, ReduxState} from "../types";
-import {
-  ACTION_TYPES,
-  Bindings,
-  PiRegisterPoPuPaProps,
-  PoPuPaRequest,
-} from "./types";
-import {RequestF, registerCommon} from "./utils";
+// C1: adopt the same `pi/rest/<verb>/<phase>/<name>` format that GET already uses.
+// Previous format was `pi/rest/POST_SUBMITTED:<name>` (uppercase, colon) — inconsistent.
+import { PiReducer, ReduxAction, ReduxState } from "../types";
+import { registerActions } from "../redux";
+import { Bindings, PiRegisterPoPuPaProps, PoPuPaRequest } from "./types";
+import { RequestF, registerCommon } from "./utils";
 
-export function registerPOST<
-  S extends ReduxState,
-  A extends ReduxAction,
-  R,
-  C = any,
->(reducer: PiReducer): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
+// C1: one registerActions block per verb, mirroring get.ts
+const POST_TYPES = registerActions("pi/rest/post", [
+  "submitted",
+  "result",
+  "error",
+  "internal_error",
+]);
+const PUT_TYPES = registerActions("pi/rest/put", [
+  "submitted",
+  "result",
+  "error",
+  "internal_error",
+]);
+const PATCH_TYPES = registerActions("pi/rest/patch", [
+  "submitted",
+  "result",
+  "error",
+  "internal_error",
+]);
+
+export function registerPOST<S extends ReduxState, A extends ReduxAction, R, C = any>(
+  reducer: PiReducer,
+): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
   return function (props: PiRegisterPoPuPaProps<S, A, R>) {
-    const {name, request} = props;
+    const { name, request } = props;
 
-    const submitType = `${ACTION_TYPES.POST_SUBMITTED}:${name}`;
-    const resultType = `${ACTION_TYPES.POST_RESULT}:${name}`;
-    const errorType = `${ACTION_TYPES.POST_ERROR}:${name}`;
-    const intErrorType = `${ACTION_TYPES.POST_INTERNAL_ERROR}:${name}`;
+    const submitType = `${POST_TYPES.SUBMITTED}/${name}`;
+    const resultType = `${POST_TYPES.RESULT}/${name}`;
+    const errorType = `${POST_TYPES.ERROR}/${name}`;
+    const intErrorType = `${POST_TYPES.INTERNAL_ERROR}/${name}`;
 
     registerCommon(
       reducer,
@@ -33,19 +48,16 @@ export function registerPOST<
   };
 }
 
-export function registerPUT<
-  S extends ReduxState,
-  A extends ReduxAction,
-  R,
-  C = any,
->(reducer: PiReducer): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
+export function registerPUT<S extends ReduxState, A extends ReduxAction, R, C = any>(
+  reducer: PiReducer,
+): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
   return function (props: PiRegisterPoPuPaProps<S, A, R>) {
-    const {name, request} = props;
+    const { name, request } = props;
 
-    const submitType = `${ACTION_TYPES.PUT_SUBMITTED}:${name}`;
-    const resultType = `${ACTION_TYPES.PUT_RESULT}:${name}`;
-    const errorType = `${ACTION_TYPES.PUT_ERROR}:${name}`;
-    const intErrorType = `${ACTION_TYPES.PUT_INTERNAL_ERROR}:${name}`;
+    const submitType = `${PUT_TYPES.SUBMITTED}/${name}`;
+    const resultType = `${PUT_TYPES.RESULT}/${name}`;
+    const errorType = `${PUT_TYPES.ERROR}/${name}`;
+    const intErrorType = `${PUT_TYPES.INTERNAL_ERROR}/${name}`;
 
     registerCommon(
       reducer,
@@ -59,19 +71,16 @@ export function registerPUT<
   };
 }
 
-export function registerPATCH<
-  S extends ReduxState,
-  A extends ReduxAction,
-  R,
-  C = any,
->(reducer: PiReducer): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
+export function registerPATCH<S extends ReduxState, A extends ReduxAction, R, C = any>(
+  reducer: PiReducer,
+): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
   return function (props: PiRegisterPoPuPaProps<S, A, R>) {
-    const {name, request} = props;
+    const { name, request } = props;
 
-    const submitType = `${ACTION_TYPES.PATCH_SUBMITTED}:${name}`;
-    const resultType = `${ACTION_TYPES.PATCH_RESULT}:${name}`;
-    const errorType = `${ACTION_TYPES.PATCH_ERROR}:${name}`;
-    const intErrorType = `${ACTION_TYPES.PATCH_INTERNAL_ERROR}:${name}`;
+    const submitType = `${PATCH_TYPES.SUBMITTED}/${name}`;
+    const resultType = `${PATCH_TYPES.RESULT}/${name}`;
+    const errorType = `${PATCH_TYPES.ERROR}/${name}`;
+    const intErrorType = `${PATCH_TYPES.INTERNAL_ERROR}/${name}`;
 
     registerCommon(
       reducer,
@@ -92,7 +101,7 @@ function requestF<S extends ReduxState, A extends ReduxAction>(
   return (state: S, action: A): [RequestInit, Bindings] => {
     const r = request(action, state);
     let ct = r.contentType;
-    const headers = {} as {[k: string]: any};
+    const headers = {} as { [k: string]: any };
     let body = r.body;
     if (body) {
       // B4: content-type is only required when a body is present; a body-less

@@ -1,4 +1,4 @@
-import {Action, Reducer} from "@reduxjs/toolkit";
+import { Action, Reducer } from "@reduxjs/toolkit";
 import {
   DispatchF,
   DispatchPipeTimeoutAction,
@@ -12,13 +12,13 @@ import {
   ReduxAction,
   ReduxState,
 } from "./types";
-import {produce} from "immer";
-import {RegisterCardState, UPDATE_STATE_ACTION} from "./card";
+import { produce } from "immer";
+import { RegisterCardState, UPDATE_STATE_ACTION } from "./card";
 import StackTrace from "stacktrace-js";
-import {getLogger} from "./logger";
-import {Dispatch} from "react";
-import {currentRoute} from "./router";
-import {uuidv7} from "./uuid";
+import { getLogger } from "./logger";
+import { Dispatch } from "react";
+import { currentRoute } from "./router";
+import { uuidv7 } from "./uuid";
 
 const logger = getLogger("reducer");
 
@@ -42,7 +42,7 @@ export function createReducer(
   initialState: ReduxState,
   dispatcher: Dispatch<any>,
 ): [Reducer<ReduxState, Action>, PiReducer] {
-  const mappings: {[k: string]: ReducerDef<ReduxState, Action>[]} = {};
+  const mappings: { [k: string]: ReducerDef<ReduxState, Action>[] } = {};
   mappings[UPDATE_STATE_ACTION] = [
     {
       mapperMulti: RegisterCardState.reducer,
@@ -99,8 +99,7 @@ export function createReducer(
         );
       }
 
-      return (reply: any) =>
-        reply?.type === replyType && reply?._replyTo === requestId;
+      return (reply: any) => reply?.type === replyType && reply?._replyTo === requestId;
     })();
 
     // Default error matching behaviour (optional):
@@ -114,8 +113,7 @@ export function createReducer(
       if (userMatchError) return userMatchError;
       if (!errorType) return undefined;
 
-      return (reply: any) =>
-        reply?.type === errorType && reply?._replyTo === requestId;
+      return (reply: any) => reply?.type === errorType && reply?._replyTo === requestId;
     })();
 
     // Use a token so we can route timeout actions.
@@ -209,10 +207,7 @@ export function createReducer(
 
     return requestId;
   };
-  const reducer = (
-    state: ReduxState | undefined,
-    action: Action,
-  ): ReduxState => {
+  const reducer = (state: ReduxState | undefined, action: Action): ReduxState => {
     const s = state || initialState;
     const ra = mappings[action.type];
     const rany = mappings["*"];
@@ -289,7 +284,7 @@ export function createReducer(
     priority: number = 0,
     key: string | undefined = undefined,
   ): PiReducerCancelF => {
-    return addReducer(eventType, {mapperOnce: mapper, priority, key});
+    return addReducer(eventType, { mapperOnce: mapper, priority, key });
   };
 
   const nonCancelF = () => {};
@@ -342,10 +337,7 @@ export function createReducer(
   return [reducer, piReducer];
 }
 
-function removeReducer(
-  key: string | undefined,
-  m: ReducerDef<ReduxState, Action>[],
-) {
+function removeReducer(key: string | undefined, m: ReducerDef<ReduxState, Action>[]) {
   if (key) {
     return m.filter((r) => r.key !== key);
   } else {

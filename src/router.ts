@@ -1,6 +1,6 @@
-import {Update, createBrowserHistory, Location} from "history";
-import {getLogger} from "./logger";
-import {createOnAction, registerActions} from "./redux";
+import { Update, createBrowserHistory, Location } from "history";
+import { getLogger } from "./logger";
+import { createOnAction, registerActions } from "./redux";
 import {
   DEF_REDUCER_PRIORITY,
   DispatchF,
@@ -11,7 +11,7 @@ import {
   ReduxState,
   Route,
 } from "./types";
-import {PiRegister} from ".";
+import { PiRegister } from ".";
 
 const logger = getLogger("router");
 export const browserHistory = createBrowserHistory();
@@ -35,11 +35,7 @@ export type ShowPageEvent = {
 };
 export const onShowPage = createOnAction<ShowPageEvent>(ACTION_TYPES.SHOW_PAGE);
 
-export const showPage = (
-  dispatch: DispatchF,
-  path: string[],
-  query?: PathQuery,
-) => {
+export const showPage = (dispatch: DispatchF, path: string[], query?: PathQuery) => {
   return dispatch(createShowPageAction(path, query));
 };
 
@@ -65,19 +61,18 @@ export const ON_INIT_ACTION = "pi/start";
 export const onInit = createOnAction<{}>(ON_INIT_ACTION);
 
 export function currentRoute(pathPrefix = ""): Route {
+  // C3: removed unused `r2 = f.url2route(window.location.href)`
   const f = route_functions(pathPrefix);
-  const r2 = f.url2route(window.location.href);
-  const r = f.location2route(browserHistory.location);
-  return r;
+  return f.location2route(browserHistory.location);
 }
 
 export function init(reducer: PiReducer, pathPrefix = ""): Route {
   let workingURL: string;
   const f = route_functions(pathPrefix);
 
-  browserHistory.listen(({action, location}: Update) => {
+  browserHistory.listen(({ action, location }: Update) => {
     // location is an object like window.location
-    const {url} = f.location2route(location);
+    const { url } = f.location2route(location);
     if (workingURL !== url) {
       logger.info("browser history:", url, action);
       setTimeout(() => navigateToPage(url, action === "POP"));
@@ -96,19 +91,20 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
     });
   }
 
+  // C5: removed `return state` — ReduceF contract is "mutate the Immer draft,
+  // do not return"; the router reducers were violating their own documented rule.
   reducer.register<ReduxState, ReduxAction & NavigateToPageEvent>(
     ACTION_TYPES.NAVIGATE_TO_PAGE,
-    (state, {url, fromBrowser}, dispatch) => {
+    (state, { url, fromBrowser }, dispatch) => {
       const r = f.url2route(url);
       r.fromBrowser = fromBrowser;
       if (workingURL && state.route?.url === r.url) {
-        return state;
+        return; // guard: URL unchanged, nothing to do
       }
       dispatch({
         type: ACTION_TYPES.SHOW_PAGE,
         ...r,
       });
-      return state;
     },
     DEF_REDUCER_PRIORITY,
     "@builtin:router:NAVIGATE_TO_PAGE",
@@ -116,7 +112,7 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
 
   reducer.register<ReduxState, ReduxAction & ShowPageEvent>(
     ACTION_TYPES.SHOW_PAGE,
-    (state, {path, query = {}, fromBrowser = false}) => {
+    (state, { path, query = {}, fromBrowser = false }) => {
       const route = f.pathl2route(path, query);
       workingURL = route.url;
       if (!fromBrowser) {
@@ -129,7 +125,7 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
         ...route,
         fromBrowser,
       };
-      return state;
+      // C5: no return — Immer captures the draft mutation automatically
     },
     DEF_REDUCER_PRIORITY,
     "@builtin:router:SHOW_PAGE",
@@ -137,11 +133,11 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
 
   reducer.register(
     "@@INIT",
-    (state) => {
+    (_state) => {
       const url = browserPath().url;
       logger.info(`Request navigation to '${url}'`);
       setTimeout(() => navigateToPage(url, true));
-      return state;
+      // C5: no return needed (no state mutation)
     },
     DEF_REDUCER_PRIORITY,
     "@builtin:router:@@INIT",
@@ -171,7 +167,7 @@ function route_functions(pathPrefix = "") {
         query[decodeURI(k)] = v ? decodeURI(v) : true;
       });
     }
-    return {url, path, query};
+    return { url, path, query };
   };
 
   const pathl2route = (path: string[], query: PathQuery): Route => {
@@ -194,7 +190,7 @@ function route_functions(pathPrefix = "") {
         url = `${url}?${s}`;
       }
     }
-    return {url, path, query};
+    return { url, path, query };
   };
-  return {location2route, url2route, pathl2route};
+  return { location2route, url2route, pathl2route };
 }

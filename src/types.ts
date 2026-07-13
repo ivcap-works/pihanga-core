@@ -1,7 +1,7 @@
 export type ReduxState = {
   route: Route;
 
-  pihanga?: {[key: string]: any};
+  pihanga?: { [key: string]: any };
 };
 
 export type Route = {
@@ -10,7 +10,7 @@ export type Route = {
   url: string;
   fromBrowser?: boolean;
 };
-export type PathQuery = {[k: string]: string | number | boolean};
+export type PathQuery = { [k: string]: string | number | boolean };
 
 export type ReduxAction = {
   type: string;
@@ -33,7 +33,7 @@ export type CardAction = ReduxAction & {
 export type PiRegisterComponent = {
   name: string;
   component: any; // ReactComponent
-  events?: {[key: string]: string};
+  events?: { [key: string]: string };
   // defaults?: { [key: string]: any }
 };
 
@@ -163,6 +163,21 @@ export interface PiReducer {
   dispatchFromReducer: DispatchF;
 }
 
+/**
+ * C8: the store object Pihanga augments with its own piReducer property.
+ * Replaces the three scattered `(store as any).piReducer` casts.
+ */
+export interface PiStore {
+  piReducer: PiReducer;
+}
+
+/**
+ * C7: canonical event-mapper function type used in CardMapping.eventMappers.
+ * Previously the type differed across CardMapping, _createCardMapping, and
+ * card.tsx — one source of truth eliminates the drift.
+ */
+export type EventMapperFn = (ev: ReduxAction, ctxtProps?: any) => ReduxAction | null;
+
 export const DEF_REDUCER_PRIORITY = 0;
 
 export type PiRegisterReducerF = <S extends ReduxState, A extends ReduxAction>(
@@ -175,19 +190,21 @@ export type PiRegisterReducerF = <S extends ReduxState, A extends ReduxAction>(
 
 export type PiReducerCancelF = () => void;
 
-export type PiRegisterOneShotReducerF = <
-  S extends ReduxState,
-  A extends ReduxAction,
->(
+// B7: added `key` parameter (was silently missing) and corrected return type
+// from `void` to `PiReducerCancelF` — the implementation has always returned a
+// cancel function; callers relying on the old type lost both the key and the
+// ability to cancel.
+export type PiRegisterOneShotReducerF = <S extends ReduxState, A extends ReduxAction>(
   eventType: string,
   mapper: ReduceOnceF<S, A>,
   priority?: number,
-) => void;
+  key?: string,
+) => PiReducerCancelF;
 
 // CARDS
 
 // context props given to <Card> in parent card
-export type PiDefCtxtProps = {[k: string]: any};
+export type PiDefCtxtProps = { [k: string]: any };
 
 // type for <Card .../>
 export type CardProp = {
@@ -213,7 +230,7 @@ export type PiCardProps<P, E = {}> = P & {
   [Key in keyof E]: (ev: E[Key]) => void;
 };
 
-export type CSSModuleClasses = {readonly [key: string]: string};
+export type CSSModuleClasses = { readonly [key: string]: string };
 
 export type PiCardRef = string | PiCardDef;
 
@@ -249,9 +266,7 @@ export type PiMapProps<
   EType = object,
   C = PiDefCtxtProps,
 > = {
-  [Property in keyof CType]:
-    | CType[Property]
-    | StateMapper<CType[Property], S, C>;
+  [Property in keyof CType]: CType[Property] | StateMapper<CType[Property], S, C>;
 } & EventHandler<EType, S> &
   EventMapper<EType, C>;
 
@@ -276,9 +291,7 @@ export type EventMapper<T, C = PiDefCtxtProps> = {
   ) => ReduxAction | null;
 };
 
-export type GenericCardParameterT =
-  | unknown
-  | StateMapper<unknown, ReduxState, unknown>;
+export type GenericCardParameterT = unknown | StateMapper<unknown, ReduxState, unknown>;
 
 export type PiCardDef = {
   cardType: string;
@@ -291,7 +304,7 @@ export type PiCardDef = {
 export type PiRegisterMetaCard = {
   type: string;
   mapper: MetaCardMapperF;
-  events?: {[key: string]: string};
+  events?: { [key: string]: string };
 };
 
 export type RegisterCardF = (name: string, parameters: PiCardDef) => PiCardRef;
@@ -368,9 +381,6 @@ export type PiMetaProps<
  * })
  * ```
  */
-export type PiMetaResolveCtx<
-  S extends ReduxState = ReduxState,
-  C = PiDefCtxtProps,
-> = {
+export type PiMetaResolveCtx<S extends ReduxState = ReduxState, C = PiDefCtxtProps> = {
   resolve: <T>(prop: StateMapper<T, S, C>) => T;
 };

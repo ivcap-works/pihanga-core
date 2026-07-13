@@ -234,10 +234,11 @@ register((r) => {
 import { showPage, onShowPage, onInit } from "@pihanga2/core";
 
 // Navigate
-dispatch(showPage("/dashboard"));
+showPage(dispatch, ["dashboard"]);          // C4: correct signature — (dispatch, path[])
 
 // React to page change
-onShowPage("/dashboard", (action, state, dispatch) => { ... });
+// C4: onShowPage(register, handler) — no path arg; receives full state on every navigation
+onShowPage(register, (state, action, dispatch) => { ... });
 
 // Run once on framework init
 onInit((action, state, dispatch) => { ... });
@@ -259,13 +260,11 @@ src/
 ├── index.ts          # Public API surface & PiRegister interface
 ├── types.ts          # Core TypeScript types (PiCardDef, ReduxState, …)
 ├── card.tsx          # <Card> component, usePiReducer hook, cls_f helper
-├── register.ts       # Low-level card registration
-├── register_cards.ts # addCard, addCardComponent, registerMetacard
+├── register_cards.ts # addCard, addCardComponent, registerMetacard, resolveCardType
 ├── reducer.ts        # createReducer — Pihanga's Redux reducer factory
 ├── redux.ts          # registerActions, actionTypesToEvents, createOnAction
 ├── root.tsx          # RootComponent factory (Provider + Card tree)
 ├── router.ts         # Hash/history-based routing (showPage, onShowPage, …)
-├── store.ts          # Internal store utilities
 ├── logger.ts         # tslog wrapper (getLogger)
 ├── uuid.ts           # uuidv7 generator
 └── rest/

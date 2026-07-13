@@ -5,8 +5,8 @@
  * easy to exercise directly and their behaviour is very important for the rest
  * of the framework.
  */
-import {describe, it, expect} from "vitest";
-import {registerActions, actionTypesToEvents} from "./redux";
+import { describe, it, expect } from "vitest";
+import { registerActions, actionTypesToEvents } from "./redux";
 
 // ---------------------------------------------------------------------------
 // registerActions
@@ -43,12 +43,12 @@ describe("registerActions", () => {
 
 describe("actionTypesToEvents", () => {
   it("converts a single UPPER_CASE key to an onCamelCase handler name", () => {
-    const events = actionTypesToEvents({CLICK: "ui/click"});
+    const events = actionTypesToEvents({ CLICK: "ui/click" });
     expect(events.onClick).toBe("ui/click");
   });
 
   it("converts a multi-word key (ITEM_SELECTED) to onItemSelected", () => {
-    const events = actionTypesToEvents({ITEM_SELECTED: "list/item_selected"});
+    const events = actionTypesToEvents({ ITEM_SELECTED: "list/item_selected" });
     expect(events.onItemSelected).toBe("list/item_selected");
   });
 
@@ -61,7 +61,7 @@ describe("actionTypesToEvents", () => {
 
   it("preserves the action type value unchanged", () => {
     const actionType = "my-module/some-action";
-    const events = actionTypesToEvents({DO_THING: actionType});
+    const events = actionTypesToEvents({ DO_THING: actionType });
     expect(events.onDoThing).toBe(actionType);
   });
 

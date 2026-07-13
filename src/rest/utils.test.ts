@@ -5,10 +5,10 @@
  * raw fetch responses into typed Redux actions, making them good candidates
  * for direct unit testing.
  */
-import {describe, it, expect} from "vitest";
-import {createErrorAction, parseResponse} from "./utils";
-import {ErrorKind, HttpResponse} from "./types";
-import {RestContentType} from "./enums";
+import { describe, it, expect } from "vitest";
+import { createErrorAction, parseResponse } from "./utils";
+import { ErrorKind, HttpResponse } from "./types";
+import { RestContentType } from "./enums";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,7 +38,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(401),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.Unauthorised);
   });
@@ -49,7 +49,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(403),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.PermissionDenied);
   });
@@ -60,7 +60,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(404),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.NotFound);
   });
@@ -71,7 +71,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(500),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.Other);
   });
@@ -82,7 +82,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(429),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.Other);
   });
@@ -93,7 +93,7 @@ describe("createErrorAction – HTTP status → ErrorKind mapping", () => {
       makeHttpResponse(422),
       "fetch-items",
       EXAMPLE_URL,
-      {type: "FETCH"},
+      { type: "FETCH" },
     );
     expect(action.error).toBe(ErrorKind.Other);
   });
@@ -106,7 +106,7 @@ describe("createErrorAction – action shape", () => {
       makeHttpResponse(404),
       "my-call",
       EXAMPLE_URL,
-      {type: "ORIGINAL"},
+      { type: "ORIGINAL" },
     );
     expect(action.type).toBe("MY_SPECIFIC_ERROR");
   });
@@ -117,7 +117,7 @@ describe("createErrorAction – action shape", () => {
       makeHttpResponse(404),
       "load-user-profile",
       EXAMPLE_URL,
-      {type: "LOAD"},
+      { type: "LOAD" },
     );
     expect(action.requestID).toBe("load-user-profile");
   });
@@ -131,7 +131,7 @@ describe("createErrorAction – action shape", () => {
   });
 
   it("attaches the original request action as `request`", () => {
-    const requestAction = {type: "FETCH_ITEM", id: "item-99"};
+    const requestAction = { type: "FETCH_ITEM", id: "item-99" };
     const action = createErrorAction(
       "ERR",
       makeHttpResponse(404),
@@ -158,9 +158,9 @@ describe("createErrorAction – action shape", () => {
 
 describe("parseResponse", () => {
   it("parses application/json responses into a JS object", async () => {
-    const body = {hello: "world", count: 3};
+    const body = { hello: "world", count: 3 };
     const response = new Response(JSON.stringify(body), {
-      headers: {"content-type": "application/json"},
+      headers: { "content-type": "application/json" },
     });
 
     const [content, contentType, mimeType] = await parseResponse(response);
@@ -172,7 +172,7 @@ describe("parseResponse", () => {
 
   it("parses text/plain responses as a string", async () => {
     const response = new Response("plain text content", {
-      headers: {"content-type": "text/plain"},
+      headers: { "content-type": "text/plain" },
     });
 
     const [content, contentType, mimeType] = await parseResponse(response);
@@ -185,7 +185,7 @@ describe("parseResponse", () => {
   it("parses text/html responses as a string (general text/* branch)", async () => {
     const html = "<h1>Hello</h1>";
     const response = new Response(html, {
-      headers: {"content-type": "text/html"},
+      headers: { "content-type": "text/html" },
     });
 
     const [content, contentType] = await parseResponse(response);
@@ -197,7 +197,7 @@ describe("parseResponse", () => {
   it("parses application/jose responses as a string", async () => {
     const joseToken = "eyJhbGciOiJFUzI1NiJ9.payload.sig";
     const response = new Response(joseToken, {
-      headers: {"content-type": "application/jose"},
+      headers: { "content-type": "application/jose" },
     });
 
     const [content, contentType] = await parseResponse(response);
@@ -208,7 +208,7 @@ describe("parseResponse", () => {
 
   it("falls back to Blob for unknown binary content types", async () => {
     const response = new Response(new Uint8Array([1, 2, 3]).buffer, {
-      headers: {"content-type": "application/octet-stream"},
+      headers: { "content-type": "application/octet-stream" },
     });
 
     const [_content, contentType, mimeType] = await parseResponse(response);
@@ -231,7 +231,7 @@ describe("parseResponse", () => {
 
   it("returns the original Response as the 4th tuple element", async () => {
     const response = new Response("hi", {
-      headers: {"content-type": "text/plain"},
+      headers: { "content-type": "text/plain" },
     });
 
     const [, , , originalResponse] = await parseResponse(response);
@@ -241,9 +241,9 @@ describe("parseResponse", () => {
 
   // B2 — mime parameters must not prevent content-type matching
   it("B2: parses 'application/json; charset=utf-8' as JSON (not blob)", async () => {
-    const body = {id: 1, name: "test"};
+    const body = { id: 1, name: "test" };
     const response = new Response(JSON.stringify(body), {
-      headers: {"content-type": "application/json; charset=utf-8"},
+      headers: { "content-type": "application/json; charset=utf-8" },
     });
 
     const [content, contentType] = await parseResponse(response);
@@ -255,7 +255,7 @@ describe("parseResponse", () => {
   it("B2: parses 'text/html; charset=utf-8' as text (not blob)", async () => {
     const html = "<p>hello</p>";
     const response = new Response(html, {
-      headers: {"content-type": "text/html; charset=utf-8"},
+      headers: { "content-type": "text/html; charset=utf-8" },
     });
 
     const [content, contentType] = await parseResponse(response);
@@ -267,11 +267,62 @@ describe("parseResponse", () => {
   it("B2: preserves the full original MIME string (with params) as the mimeType tuple element", async () => {
     const fullMime = "application/json; charset=utf-8";
     const response = new Response("{}", {
-      headers: {"content-type": fullMime},
+      headers: { "content-type": fullMime },
     });
 
     const [, , mimeType] = await parseResponse(response);
 
     expect(mimeType).toBe(fullMime);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B8 — HttpResponse.headers is a serialisable plain object
+// ---------------------------------------------------------------------------
+
+describe("B8 — HttpResponse.headers is a serialisable plain string object", () => {
+  it("Object.fromEntries(response.headers.entries()) produces a plain object (not a Headers instance)", () => {
+    const response = new Response("", {
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": "abc-123",
+      },
+    });
+
+    // This is exactly the expression now used in _fetch().
+    const plain = Object.fromEntries(response.headers.entries());
+
+    // B8: must NOT be a Headers instance — plain objects are JSON-serialisable.
+    expect(plain).not.toBeInstanceOf(Headers);
+    expect(Object.getPrototypeOf(plain)).toBe(Object.prototype);
+  });
+
+  it("all header values are strings (satisfies {[k: string]: string})", () => {
+    const response = new Response("", {
+      headers: {
+        "content-type": "text/plain",
+        "content-length": "42",
+      },
+    });
+
+    const plain = Object.fromEntries(response.headers.entries());
+
+    Object.entries(plain).forEach(([key, value]) => {
+      expect(typeof key).toBe("string");
+      expect(typeof value).toBe("string");
+    });
+  });
+
+  it("header values are correctly round-tripped through JSON serialisation", () => {
+    const response = new Response("", {
+      headers: { "x-custom": "hello world", accept: "application/json" },
+    });
+
+    const plain = Object.fromEntries(response.headers.entries());
+    // If serialisable, JSON.stringify → JSON.parse must give back the same data.
+    const roundTripped = JSON.parse(JSON.stringify(plain));
+
+    expect(roundTripped["x-custom"]).toBe("hello world");
+    expect(roundTripped["accept"]).toBe("application/json");
   });
 });

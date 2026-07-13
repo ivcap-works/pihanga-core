@@ -5,7 +5,7 @@
  * memo) and the addCardComponent registry so that the tests are straightforward
  * and don't depend on a running Redux store.
  */
-import {describe, expect, it, vi} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   _createCardMapping,
   _registerCard,
@@ -30,12 +30,12 @@ import {
 
 describe("isCardRef", () => {
   it("returns true for an object that has a cardType property", () => {
-    expect(isCardRef({cardType: "ui/button"})).toBe(true);
+    expect(isCardRef({ cardType: "ui/button" })).toBe(true);
   });
 
   it("returns true even when cardType is an empty string", () => {
     // The check is only `!== undefined`, so an empty string still qualifies
-    expect(isCardRef({cardType: ""})).toBe(true);
+    expect(isCardRef({ cardType: "" })).toBe(true);
   });
 
   it("returns false for a plain string (card name reference)", () => {
@@ -51,7 +51,7 @@ describe("isCardRef", () => {
   });
 
   it("returns false for an object that has no cardType property", () => {
-    expect(isCardRef({title: "Hello"})).toBe(false);
+    expect(isCardRef({ title: "Hello" })).toBe(false);
   });
 
   it("returns false for a number", () => {
@@ -65,16 +65,16 @@ describe("isCardRef", () => {
 
 describe("createCardDeclaration", () => {
   it("creates a factory that adds cardType to all props", () => {
-    const Button = createCardDeclaration<{label: string}>("ui/button");
-    const def = Button({label: "Click me"} as any);
+    const Button = createCardDeclaration<{ label: string }>("ui/button");
+    const def = Button({ label: "Click me" } as any);
     expect(def.cardType).toBe("ui/button");
     expect(def.label).toBe("Click me");
   });
 
   it("preserves every prop from the input", () => {
-    type Props = {count: number; label: string; active: boolean};
+    type Props = { count: number; label: string; active: boolean };
     const Widget = createCardDeclaration<Props>("ui/widget");
-    const def = Widget({count: 5, label: "hi", active: true} as any);
+    const def = Widget({ count: 5, label: "hi", active: true } as any);
     expect(def.count).toBe(5);
     expect(def.label).toBe("hi");
     expect(def.active).toBe(true);
@@ -89,11 +89,11 @@ describe("createCardDeclaration", () => {
   });
 
   it("two declarations for different types produce independent factories", () => {
-    const A = createCardDeclaration<{x: number}>("ns/type-a");
-    const B = createCardDeclaration<{y: string}>("ns/type-b");
+    const A = createCardDeclaration<{ x: number }>("ns/type-a");
+    const B = createCardDeclaration<{ y: string }>("ns/type-b");
 
-    const defA = A({x: 1} as any);
-    const defB = B({y: "hello"} as any);
+    const defA = A({ x: 1 } as any);
+    const defB = B({ y: "hello" } as any);
 
     expect(defA.cardType).toBe("ns/type-a");
     expect(defB.cardType).toBe("ns/type-b");
@@ -104,9 +104,9 @@ describe("createCardDeclaration", () => {
 
   it("later props can override cardType if explicitly set (plain spread)", () => {
     // createCardDeclaration spreads then adds cardType last, so cardType wins.
-    const Card = createCardDeclaration<{label: string}>("ui/original");
+    const Card = createCardDeclaration<{ label: string }>("ui/original");
     // Even if the prop object tries to set cardType, the declared type wins
-    const def = Card({label: "test", cardType: "ui/override"} as any);
+    const def = Card({ label: "test", cardType: "ui/override" } as any);
     // The implementation does { ...p, cardType }, so the declared type wins
     expect(def.cardType).toBe("ui/original");
   });
@@ -123,15 +123,15 @@ describe("addCardComponent", () => {
   it("registers a card component under its name", () => {
     const name = uid();
     const component = () => null;
-    addCardComponent({name, component});
+    addCardComponent({ name, component });
     expect(cardTypes[name]).toBeDefined();
     expect(cardTypes[name].component).toBe(component);
   });
 
   it("stores the supplied events map alongside the component", () => {
     const name = uid();
-    const events = {onClick: "ui/click", onHover: "ui/hover"};
-    addCardComponent({name, component: () => null, events});
+    const events = { onClick: "ui/click", onHover: "ui/hover" };
+    addCardComponent({ name, component: () => null, events });
     expect(cardTypes[name].events).toEqual(events);
   });
 
@@ -139,8 +139,8 @@ describe("addCardComponent", () => {
     const name = uid();
     const first = () => null;
     const second = () => null;
-    addCardComponent({name, component: first});
-    addCardComponent({name, component: second});
+    addCardComponent({ name, component: first });
+    addCardComponent({ name, component: second });
     expect(cardTypes[name].component).toBe(second);
   });
 });
@@ -149,10 +149,10 @@ describe("addCardComponent", () => {
 // memo
 // ---------------------------------------------------------------------------
 
-type AppState = ReduxState & {items: string[]};
+type AppState = ReduxState & { items: string[] };
 
 function makeAppState(items: string[]): AppState {
-  return {route: {path: [], query: {}, url: "/"}, pihanga: {}, items};
+  return { route: { path: [], query: {}, url: "/" }, pihanga: {}, items };
 }
 
 function ctx(key = "card-key") {
@@ -222,11 +222,8 @@ describe("memo", () => {
 
   it("passes the context and full state to mapF", () => {
     const mapF = vi.fn(
-      (
-        _items: string[],
-        context: StateMapperContext<unknown>,
-        state: AppState,
-      ) => `${context.cardKey ?? "-"}:${state.items.length}`,
+      (_items: string[], context: StateMapperContext<unknown>, state: AppState) =>
+        `${context.cardKey ?? "-"}:${state.items.length}`,
     );
     const memoized = memo<string[], string, AppState>((s) => s.items, mapF);
 
@@ -270,17 +267,17 @@ describe("metacard metaCard tagging", () => {
     const metaType = `meta-${uid()}`;
     const metaName = `instance-${uid()}`;
 
-    addCardComponent({name: innerType, component: () => null});
+    addCardComponent({ name: innerType, component: () => null });
     registerMetacard(registerCardF)({
       type: metaType,
-      mapper: (_name, _props, _rc) => ({cardType: innerType}),
+      mapper: (_name, _props, _rc) => ({ cardType: innerType }),
     });
 
-    _registerCard(metaName, {cardType: metaType}, noopReducer);
+    _registerCard(metaName, { cardType: metaType }, noopReducer);
 
     const mapping = cardMappings[metaName];
     expect(mapping).toBeDefined();
-    expect(mapping.metaCard).toEqual({name: metaName, topCard: metaName});
+    expect(mapping.metaCard).toEqual({ name: metaName, topCard: metaName });
   });
 
   it("sets metaCard on sub-cards registered by the mapper", () => {
@@ -288,20 +285,20 @@ describe("metacard metaCard tagging", () => {
     const metaType = `meta-${uid()}`;
     const metaName = `instance-${uid()}`;
 
-    addCardComponent({name: innerType, component: () => null});
+    addCardComponent({ name: innerType, component: () => null });
     registerMetacard(registerCardF)({
       type: metaType,
       mapper: (_name, _props, rc) => {
-        rc("child", {cardType: innerType});
-        return {cardType: innerType};
+        rc("child", { cardType: innerType });
+        return { cardType: innerType };
       },
     });
 
-    _registerCard(metaName, {cardType: metaType}, noopReducer);
+    _registerCard(metaName, { cardType: metaType }, noopReducer);
 
     const subMapping = cardMappings[`${metaName}/child`];
     expect(subMapping).toBeDefined();
-    expect(subMapping.metaCard).toEqual({name: metaName, topCard: metaName});
+    expect(subMapping.metaCard).toEqual({ name: metaName, topCard: metaName });
   });
 
   it("metaCard.name and metaCard.topCard both equal the metacard's registered name", () => {
@@ -309,17 +306,17 @@ describe("metacard metaCard tagging", () => {
     const metaType = `meta-${uid()}`;
     const metaName = `instance-${uid()}`;
 
-    addCardComponent({name: innerType, component: () => null});
+    addCardComponent({ name: innerType, component: () => null });
     registerMetacard(registerCardF)({
       type: metaType,
       mapper: (_name, _props, rc) => {
-        rc("a", {cardType: innerType});
-        rc("b", {cardType: innerType});
-        return {cardType: innerType};
+        rc("a", { cardType: innerType });
+        rc("b", { cardType: innerType });
+        return { cardType: innerType };
       },
     });
 
-    _registerCard(metaName, {cardType: metaType}, noopReducer);
+    _registerCard(metaName, { cardType: metaType }, noopReducer);
 
     for (const key of [metaName, `${metaName}/a`, `${metaName}/b`]) {
       expect(cardMappings[key]?.metaCard?.name).toBe(metaName);
@@ -331,8 +328,8 @@ describe("metacard metaCard tagging", () => {
     const plainType = `plain-${uid()}`;
     const plainName = `plain-instance-${uid()}`;
 
-    addCardComponent({name: plainType, component: () => null});
-    _registerCard(plainName, {cardType: plainType}, noopReducer);
+    addCardComponent({ name: plainType, component: () => null });
+    _registerCard(plainName, { cardType: plainType }, noopReducer);
 
     expect(cardMappings[plainName]).toBeDefined();
     expect(cardMappings[plainName].metaCard).toBeUndefined();
@@ -350,13 +347,13 @@ describe("B1 — null prop does not crash _createCardMapping", () => {
   it("stores null as a plain prop without throwing", () => {
     const cardType = `b1-card-${uid()}`;
     const cardName = `b1-instance-${uid()}`;
-    addCardComponent({name: cardType, component: () => null});
+    addCardComponent({ name: cardType, component: () => null });
 
     // Before the fix typeof null === "object" caused `.cardType` access to throw.
     expect(() =>
       _createCardMapping(
         cardName,
-        {cardType, someNullProp: null} as any,
+        { cardType, someNullProp: null } as any,
         noopReducer,
         {},
       ),
@@ -371,12 +368,12 @@ describe("B1 — null prop does not crash _createCardMapping", () => {
     const innerType = `b1-inner-${uid()}`;
     const outerType = `b1-outer-${uid()}`;
     const outerName = `b1-outer-instance-${uid()}`;
-    addCardComponent({name: innerType, component: () => null});
-    addCardComponent({name: outerType, component: () => null});
+    addCardComponent({ name: innerType, component: () => null });
+    addCardComponent({ name: outerType, component: () => null });
 
     _createCardMapping(
       outerName,
-      {cardType: outerType, child: {cardType: innerType}} as any,
+      { cardType: outerType, child: { cardType: innerType } } as any,
       noopReducer,
       {},
     );
@@ -404,8 +401,8 @@ describe("A8 — memo cache key is cardName, not cardKey", () => {
     const mapperFn = vi.fn((v: number) => v * 2);
     const memoFn = memo(filterFn, mapperFn);
 
-    const state1 = {value: 10};
-    const state2 = {value: 20};
+    const state1 = { value: 10 };
+    const state2 = { value: 20 };
 
     memoFn(state1 as any, makeCtxt("card-alpha") as any);
     // Previously both went to the "-" bucket, so the second call would
@@ -425,7 +422,7 @@ describe("A8 — memo cache key is cardName, not cardKey", () => {
     const mapperFn = vi.fn((v: number) => v * 3);
     const memoFn = memo(filterFn, mapperFn);
 
-    const state = {value: 5};
+    const state = { value: 5 };
 
     memoFn(state as any, makeCtxt("row-card", "row-1") as any);
     memoFn(state as any, makeCtxt("row-card", "row-2") as any);
@@ -448,7 +445,7 @@ describe("A8 — memo cache key is cardName, not cardKey", () => {
       },
     );
 
-    const state = {x: 7};
+    const state = { x: 7 };
     const ctx = makeCtxt("stable-card") as any;
 
     memoFn(state, ctx); // first: filter + mapper
