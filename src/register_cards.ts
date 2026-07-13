@@ -14,6 +14,7 @@ import {
   PiRegisterComponent,
   PiRegisterMetaCard,
   PiRegisterReducerF,
+  PiReducerCancelF,
   ReduxState,
   RegisterCardF,
   StateMapper,
@@ -33,6 +34,14 @@ export type CardMapping = {
   eventMappers: { [k: string]: EventMapperFn }; // C7
   cardEvents: { [key: string]: string };
   parameters: PiCardDef; // original
+  /**
+   * Cancel functions for the reducers registered by this mapping's `on…`
+   * event-handler props. Called by {@link removeCardMapping} so that removing
+   * a card (unmount of an anonymous card, orphan sweep) doesn't leak reducers.
+   * Replaced wholesale on every (re-)mapping — stale cancels must never be
+   * invoked, since re-registration reuses the same reducer keys.
+   */
+  reducerCancels?: PiReducerCancelF[];
   /**
    * Set when this card was created as part of a metacard registration.
    * Both the top card and all sub-cards carry this info.
@@ -175,6 +184,7 @@ export function _createCardMapping(
 ) {
   const props = {} as { [k: string]: unknown };
   const eventMappers = {} as { [k: string]: EventMapperFn }; // C7
+  const reducerCancels: PiReducerCancelF[] = [];
 
   Object.entries(parameters).forEach(([k, v]) => {
     if (k === "cardType") return;
@@ -186,7 +196,15 @@ export function _createCardMapping(
     }
     if (
       k.startsWith("on") &&
-      processEventParameter(k, v, cardEvents, eventMappers, registerReducer, name)
+      processEventParameter(
+        k,
+        v,
+        cardEvents,
+        eventMappers,
+        registerReducer,
+        name,
+        reducerCancels,
+      )
     ) {
       return;
     }
@@ -199,6 +217,9 @@ export function _createCardMapping(
     cm.props = props;
     cm.eventMappers = eventMappers;
     cm.parameters = parameters; // A3: persist so identity/deep-equal check in checkForAnonymousCard can short-circuit
+    // Replace (never merge): re-registration reused the same reducer keys, so
+    // the old cancel fns now point at the NEW registrations and must be dropped.
+    cm.reducerCancels = reducerCancels;
   } else {
     cardMappings[name] = {
       cardType: parameters.cardType,
@@ -206,8 +227,27 @@ export function _createCardMapping(
       eventMappers,
       cardEvents,
       parameters,
+      reducerCancels,
     };
   }
+}
+
+/**
+ * Remove a card mapping (and any nested `name/…` descendant mappings created
+ * from inline card definitions), cancelling the reducers each mapping
+ * registered for its `on…` event-handler props.
+ *
+ * Used by the anonymous-card unmount cleanup and the StrictMode orphan sweep
+ * in `card.tsx`. Named (application-registered) cards are never removed.
+ */
+export function removeCardMapping(name: string): void {
+  const prefix = `${name}/`;
+  Object.keys(cardMappings).forEach((k) => {
+    if (k === name || k.startsWith(prefix)) {
+      cardMappings[k].reducerCancels?.forEach((cancel) => cancel());
+      delete cardMappings[k];
+    }
+  });
 }
 
 export function _updateCardMapping(
@@ -341,6 +381,7 @@ function processEventParameter(
   eventMappers: { [k: string]: EventMapperFn }, // C7
   registerReducer: PiRegisterReducerF,
   cardName: string,
+  reducerCancels: PiReducerCancelF[],
 ): boolean {
   const eva = Object.entries(events).find(([n, _]) => {
     return propName === n || propName === `${n}Mapper`;
@@ -363,7 +404,7 @@ function processEventParameter(
       action: CardAction,
       dispatch: DispatchF,
     ) => void;
-    registerReducer(
+    const cancel = registerReducer(
       actionType,
       (s, a, d) => {
         const ca = a as CardAction;
@@ -375,6 +416,7 @@ function processEventParameter(
       `on card ${cardName} for ${propName}`,
       r,
     );
+    reducerCancels.push(cancel);
   }
   if (propName === `${evName}Mapper`) {
     logger.debug("processEventParameter", cardName);

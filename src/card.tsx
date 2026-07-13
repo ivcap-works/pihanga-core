@@ -23,6 +23,7 @@ import {
   _updateCardMapping,
   _registerCard,
   cardMappings,
+  removeCardMapping,
   resolveCardType,
   dispatch2registerReducer,
   CardMapping,
@@ -48,6 +49,26 @@ type CardInfo = {
  */
 const metaCardCtxtPropsStore: { [topCardName: string]: CardProp } = {};
 
+/**
+ * Anonymous card names whose owning component instance has COMMITTED (its
+ * effect ran). Registrations made during a render pass that React discarded
+ * (StrictMode double-invoke, aborted concurrent render) never appear here and
+ * are garbage-collected by the orphan sweep in CardImpl's effect.
+ */
+const confirmedAnonCards = new Set<string>();
+
+/**
+ * The anonymous ROOT of a mapping name: `"parent/type#id/child"` → the part up
+ * to the first `/` after the `#`. Descendant mappings (nested inline card
+ * defs) are confirmed via their root, not individually.
+ */
+function anonRootOf(name: string): string {
+  const hash = name.indexOf("#");
+  if (hash < 0) return name;
+  const slash = name.indexOf("/", hash);
+  return slash < 0 ? name : name.slice(0, slash);
+}
+
 // A1: memoised — Card's own props are stable strings, so React.memo prevents
 // cascade re-renders from parent components re-rendering.
 function CardImpl(props: CardProp): JSX.Element {
@@ -59,22 +80,68 @@ function CardImpl(props: CardProp): JSX.Element {
   const autoId = useId();
   const dispatch = useDispatch(); // never change the order of hooks called
 
-  const isAnonymous = typeof props.cardName !== "string";
-  if (!isAnonymous) {
+  // Gracefully render nothing when cardName is undefined/null — this happens when
+  // a metacard mapper places an optional slot prop directly into a content array
+  // and the caller didn't supply that prop. Treat it the same as an empty slot.
+  const cardNameIsAbsent = props.cardName === undefined || props.cardName === null;
+
+  const isAnonymous = !cardNameIsAbsent && typeof props.cardName !== "string";
+  if (!isAnonymous && !cardNameIsAbsent) {
     cardName = props.cardName as string;
-  } else {
+  } else if (!cardNameIsAbsent) {
     // lets fix it
     cardName = checkForAnonymousCard(props, autoId, dispatch);
+  } else {
+    cardName = "";
   }
 
   // A7: remove the anonymous card's registry entry on unmount so cardMappings
   // and the reducer table don't grow without bound in apps with dynamic lists.
+  //
+  // StrictMode safety — two problems this effect must handle:
+  //
+  // 1. React 18 StrictMode runs setup → cleanup → setup on mount. The cleanup
+  //    removes the mapping, but registration normally only happens during
+  //    render (checkForAnonymousCard) — so the setup must RE-REGISTER when the
+  //    mapping is missing, otherwise the card loses its mapping while still
+  //    mounted and disappears on the next selector pass.
+  //
+  // 2. StrictMode double-invokes render with SEPARATE hook state per pass, so
+  //    useId() yields a DIFFERENT id in the discarded pass than in the
+  //    committed one (verified empirically; the same holds for useState/useRef
+  //    initialisers). The discarded pass therefore registers an orphan mapping
+  //    (+ reducers) under an id whose effect never runs. The committed effect
+  //    below confirms its own name and sweeps unconfirmed same-prefix orphans.
+  //    A later same-prefix sibling swept by mistake is restored by its own
+  //    effect via the missing-mapping re-registration in (1).
+  const cardImplPropsRef = useRef(props);
+  cardImplPropsRef.current = props;
   useEffect(() => {
     if (!isAnonymous || cardName === "") return;
+    confirmedAnonCards.add(cardName);
+    if (!cardMappings[cardName]) {
+      // Restore the mapping deleted by a previous cleanup (StrictMode
+      // simulated unmount / orphan sweep, or unmount/remount with same id).
+      checkForAnonymousCard(cardImplPropsRef.current, autoId, dispatch);
+    }
+    // Sweep orphans left by discarded render passes: same "<parent>/<type>#"
+    // prefix (incl. cardKey), registered during render but never confirmed.
+    const prefix = cardName.slice(0, cardName.lastIndexOf("#") + 1);
+    Object.keys(cardMappings).forEach((k) => {
+      if (k.startsWith(prefix) && !confirmedAnonCards.has(anonRootOf(k))) {
+        removeCardMapping(k);
+      }
+    });
     return () => {
-      delete cardMappings[cardName];
+      confirmedAnonCards.delete(cardName);
+      removeCardMapping(cardName);
     };
-  }, [isAnonymous, cardName]); // stable: derived from stable autoId + parentCard
+  }, [isAnonymous, cardName, autoId, dispatch]); // stable: derived from stable autoId + parentCard
+
+  if (cardNameIsAbsent) {
+    // Optional slot not provided — render nothing, no error.
+    return <ErrorCardComponent content={<></>} />;
+  }
 
   if (cardName === "") {
     logger.error("card name is not of type string", props.cardName);
@@ -155,8 +222,14 @@ function checkForAnonymousCard(
   const regRed = el[1];
   if (mapping) {
     // looks like we already processed it
-    // do update props if parameters have changed (A3: use deep-equal, not identity)
-    if (!equal(mapping.parameters, parameters)) {
+    // A3: use deep-equal, not identity.
+    // Skip update for metacard-expanded cards: _updateCardMapping is called with
+    // the raw metacard PiCardDef (e.g. {cardType:"meta/foo", value:(s)=>s.x}) but
+    // the existing mapping's cardType/props were set by _registerMetadataCard for
+    // the EXPANDED top card (e.g. a Stack with layout props). Overwriting those
+    // expanded props with the raw metacard props corrupts the rendered output.
+    // Sub-card state mappers access input props via ctxtProps/resolve at render time.
+    if (!mapping.metaCard && !equal(mapping.parameters, parameters)) {
       _updateCardMapping(cardName, parameters, regRed, mapping);
     }
   } else {
@@ -200,11 +273,22 @@ const GenericCardComponent = React.memo(
     const prevCardPropsRef = useRef<CompProps | undefined>(undefined);
 
     // Clean up the metacard store entry on unmount.
+    //
+    // StrictMode safety: the entry is written during render, but StrictMode's
+    // mount cycle (setup → cleanup → setup) deletes it via the cleanup while
+    // the card stays mounted. Since React.memo now (correctly) suppresses the
+    // parent-driven re-renders that used to re-write it, the setup must
+    // restore the entry itself — otherwise metacard sub-cards resolve
+    // metaCtxtProps as undefined and their content disappears.
+    const isMetaTopCard = info.mapping.metaCard?.topCard === cardName;
     useEffect(() => {
+      if (isMetaTopCard) {
+        metaCardCtxtPropsStore[cardName] = propsRef.current;
+      }
       return () => {
         delete metaCardCtxtPropsStore[cardName];
       };
-    }, [cardName]);
+    }, [cardName, isMetaTopCard]);
 
     const cardProps = useSelector<ReduxState, CompProps>(
       (s) => getCardProps(cardName, s, props),
@@ -334,6 +418,12 @@ function getCardProps(cardName: string, state: ReduxState, props: CardProp): Com
   const mapping = cardMappings[cardName];
   // fetch all the usage specific props in 'rest' and pass them down
   const { cardName: _n, cardKey, parentCard: _p, children: _c, ...rest } = props;
+  if (!mapping) {
+    // Mapping not yet registered or already cleaned up (e.g. StrictMode double-invoke
+    // deletes the mapping in CardImpl's effect cleanup before GenericCardComponent's
+    // useSelector subscription is removed). Return raw props so the selector doesn't throw.
+    return { cardName, cardKey, ...rest };
+  }
   // For sub-cards of a metacard, surface the top card's ctxtProps as metaCtxtProps
   // so state mappers can access the context from where the metacard was placed.
   const metaCtxtProps =
@@ -370,6 +460,21 @@ function getCardProps(cardName: string, state: ReduxState, props: CardProp): Com
       } catch (ex) {
         logger.error(`while resolving property '${key}'`, ex);
       }
+    } else if (Array.isArray(vf) && vf.some((item) => typeof item === "function")) {
+      // Resolve state-mapper function items in arrays.
+      // Only allocate a new array when at least one item is actually a function —
+      // preserving reference stability for pure-string/PiCardDef content arrays
+      // so that propEq's reference short-circuit still fires.
+      v = vf.map((item) => {
+        if (typeof item !== "function") return item;
+        const f = item as StateMapper<unknown, ReduxState, any>;
+        try {
+          return f(state, ctxt);
+        } catch (ex) {
+          logger.error(`while resolving array item in property '${key}'`, ex);
+          return undefined;
+        }
+      });
     } else if (key in props) {
       v = props[key];
     }
