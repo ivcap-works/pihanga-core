@@ -53,15 +53,29 @@ const metaCardCtxtPropsStore: {[topCardName: string]: CardProp} = {};
 function CardImpl(props: CardProp): JSX.Element {
   let cardName: string;
 
-  const [id, _] = React.useState<number>(Math.floor(Math.random() * 10000));
+  // A7: useId() is stable across StrictMode double-invocations and remounts;
+  // Math.random() was a 1-in-10k collision source that also grew cardMappings
+  // without bound because every remount produced a fresh id.
+  const autoId = useId();
   const dispatch = useDispatch(); // never change the order of hooks called
 
-  if (typeof props.cardName === "string") {
-    cardName = props.cardName;
+  const isAnonymous = typeof props.cardName !== "string";
+  if (!isAnonymous) {
+    cardName = props.cardName as string;
   } else {
     // lets fix it
-    cardName = checkForAnonymousCard(props, id, dispatch);
+    cardName = checkForAnonymousCard(props, autoId, dispatch);
   }
+
+  // A7: remove the anonymous card's registry entry on unmount so cardMappings
+  // and the reducer table don't grow without bound in apps with dynamic lists.
+  useEffect(() => {
+    if (!isAnonymous || cardName === "") return;
+    return () => {
+      delete cardMappings[cardName];
+    };
+  }, [isAnonymous, cardName]); // stable: derived from stable autoId + parentCard
+
   if (cardName === "") {
     logger.error("card name is not of type string", props.cardName);
     // A4: render as a real component so hook counts are stable in Card
@@ -87,25 +101,33 @@ export const Card = React.memo(CardImpl);
 
 export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
   eventType: string,
-  mapper: ReduceF<S, A>, // (state: S, action: A, dispatch: DispatchF) => S,
+  mapper: ReduceF<S, A>,
   cardName: string,
 ) {
   const store = useStore();
-  let key: string;
-  if (cardName !== "") {
-    key = `inside card '${cardName}'`;
-  } else {
-    key = useId();
-  }
+  // A5: always call useId() unconditionally (Rules of Hooks), choose the key afterwards.
+  const autoId = useId();
+  const key = cardName !== "" ? `inside card '${cardName}'` : autoId;
+
+  // A5: stable mapper ref so that a changed closure doesn't force a re-registration.
+  const mapperRef = useRef(mapper);
+  mapperRef.current = mapper;
+
   useEffect(() => {
     const r = (store as any).piReducer as PiReducer;
-    return r.register(eventType, mapper, 0, key);
-  });
+    // Wrap in a stable closure that always reads the latest mapper from the ref.
+    return r.register(
+      eventType,
+      (s: S, a: A, d: any, cancel: any) => mapperRef.current(s, a, d, cancel),
+      0,
+      key,
+    );
+  }, [eventType, key, store]); // A5: explicit dep array — no spurious re-registrations
 }
 
 function checkForAnonymousCard(
   props: any,
-  id: number,
+  id: string, // A7: was number (Math.random); now string (useId)
   dispatch: Dispatch<AnyAction>,
 ): string {
   const cardType = props.cardName?.cardType;
@@ -176,6 +198,8 @@ const GenericCardComponent = React.memo(
     const metaCtxtPropsRef = useRef<CardProp | undefined>(undefined);
     // ctxtPropsRef holds the latest {...props, resolve} for event mappers.
     const ctxtPropsRef = useRef<any>({});
+    // A6: prev cardProps ref for RegisterCardState tracking in the effect below.
+    const prevCardPropsRef = useRef<CompProps | undefined>(undefined);
 
     // Clean up the metacard store entry on unmount.
     useEffect(() => {
@@ -262,7 +286,16 @@ const GenericCardComponent = React.memo(
       [cardName, info.mapping.cardType],
     );
 
-    RegisterCardState.props(cardName, cardProps, dispatch);
+    // A6: RegisterCardState bookkeeping moved from propEq (pure equality fn) to a
+    // useEffect so it runs after commit and is safe under StrictMode / concurrent.
+    useEffect(() => {
+      // When useSelector re-uses the stored reference (propEq returned true),
+      // cardProps is the same object — structurally unchanged.
+      const isUnchanged = prevCardPropsRef.current === cardProps;
+      RegisterCardState.changed(cardName, isUnchanged, cardProps);
+      RegisterCardState.props(cardName, cardProps, dispatch);
+      prevCardPropsRef.current = cardProps;
+    }); // intentionally no dep array: runs after every render, mirrors propEq cadence
 
     const extCardProps: CompProps = {...cardProps, ...eventHandlers, _cls: cls};
     return React.createElement(
@@ -385,9 +418,10 @@ export function cls_f(
 
 function propEq(oldP: CompProps, newP: CompProps): boolean {
   // A10: short-circuit on reference equality before the deep comparison.
-  const isUnchanged = oldP === newP || equal(oldP, newP);
-  RegisterCardState.changed(newP.cardName, isUnchanged, newP);
-  return isUnchanged;
+  // A6: removed RegisterCardState.changed from here — useSelector equality
+  // functions must be pure; in StrictMode they can be called twice per render
+  // and scheduling timers from inside them is undefined behaviour.
+  return oldP === newP || equal(oldP, newP);
 }
 
 function renderUnknownCard(cardName: string): JSX.Element {

@@ -16,9 +16,15 @@ import {render, act} from "@testing-library/react";
 import {configureStore} from "@reduxjs/toolkit";
 import {Provider} from "react-redux";
 import {describe, it, expect} from "vitest";
-import {Card} from "./card";
-import {addCardComponent, _registerCard} from "./register_cards";
+import {Card, usePiReducer} from "./card";
+import {
+  addCardComponent,
+  _registerCard,
+  cardMappings,
+  dispatch2registerReducer,
+} from "./register_cards";
 import type {PiRegisterReducerF} from "./types";
+import {vi} from "vitest";
 
 // ── test helpers ──────────────────────────────────────────────────────────────
 
@@ -271,5 +277,171 @@ describe("A4 — ErrorCardComponent does not re-render on unrelated dispatches",
 
     // A4: ErrorCardComponent has no useSelector subscription — DOM must not change.
     expect(container.innerHTML).toBe(before);
+  });
+});
+
+// ── A5 — usePiReducer: no spurious re-registrations ──────────────────────────
+
+describe("A5 — usePiReducer: no spurious re-registrations", () => {
+  it("registers the reducer exactly once even when the parent re-renders multiple times", async () => {
+    const store = createTestStore({x: 0});
+    // Attach a mock piReducer so usePiReducer has something to call.
+    const mockRegister = vi.fn(() => () => {}); // returns cancel fn
+    (store as any).piReducer = {register: mockRegister, dispatch: vi.fn()};
+
+    let forceParentRender!: () => void;
+    const Parent = () => {
+      const [, setN] = React.useState(0);
+      forceParentRender = () => setN((n) => n + 1);
+
+      // useId() inside usePiReducer — must be called unconditionally.
+      usePiReducer("A5/TEST", (_s: any) => {}, "");
+      return <div />;
+    };
+
+    render(<Parent />, {wrapper: storeWrapper(store)});
+
+    // register should have been called exactly once on mount.
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+
+    // Force several parent re-renders.
+    await act(async () => {
+      forceParentRender();
+      forceParentRender();
+    });
+
+    // A5: dep array [eventType, key, store] prevents re-registration on re-renders.
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-registers only when eventType changes", async () => {
+    const store = createTestStore();
+    const mockRegister = vi.fn((..._args: any[]) => () => {}); // spread → calls typed as any[][]
+    (store as any).piReducer = {register: mockRegister, dispatch: vi.fn()};
+
+    let setEventType!: (t: string) => void;
+    const Parent = () => {
+      const [eventType, setEt] = React.useState("A5/FIRST");
+      setEventType = setEt;
+      usePiReducer(eventType, (_s: any) => {}, "my-card");
+      return <div />;
+    };
+
+    render(<Parent />, {wrapper: storeWrapper(store)});
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      setEventType("A5/SECOND");
+    });
+
+    // A5: eventType changed → effect re-runs → cancel old + register new.
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(mockRegister.mock.calls[1][0]).toBe("A5/SECOND");
+  });
+});
+
+// ── A7 — Stable anonymous-card IDs + cleanup on unmount ──────────────────────
+
+/**
+ * Anonymous card registration (checkForAnonymousCard) looks up the store's
+ * dispatch in dispatch2registerReducer, which is populated by addCard() inside
+ * start().  In tests that don't call start() we must seed it manually and clean
+ * up afterwards to avoid leaking into other tests.
+ */
+function withAnonSupport<T>(
+  store: ReturnType<typeof createTestStore>,
+  cb: () => T,
+): T {
+  const entry: [React.Dispatch<any>, PiRegisterReducerF] = [
+    store.dispatch as any,
+    noopReducer,
+  ];
+  dispatch2registerReducer.push(entry);
+  try {
+    return cb();
+  } finally {
+    const idx = dispatch2registerReducer.indexOf(entry);
+    if (idx >= 0) dispatch2registerReducer.splice(idx, 1);
+  }
+}
+
+describe("A7 — anonymous cards: stable IDs and cleanup on unmount", () => {
+  const anonType = `a7-anon-${uid()}`;
+
+  it("registers an anonymous card in cardMappings when rendered", () => {
+    addCardComponent({name: anonType, component: () => <div />});
+    const store = createTestStore();
+
+    const beforeKeys = new Set(Object.keys(cardMappings));
+
+    const {unmount} = withAnonSupport(store, () =>
+      render(
+        <Card cardName={{cardType: anonType} as any} parentCard="a7-parent" />,
+        {wrapper: storeWrapper(store)},
+      ),
+    );
+
+    // A new entry whose key contains the anonType should have appeared.
+    const newKeys = Object.keys(cardMappings).filter((k) => !beforeKeys.has(k));
+    const anonKey = newKeys.find((k) => k.includes(anonType));
+    expect(anonKey).toBeDefined();
+
+    // A7: the mapping must be removed when the card unmounts.
+    unmount();
+    expect(cardMappings[anonKey!]).toBeUndefined();
+  });
+
+  it("two simultaneously mounted anonymous cards of the same type get distinct names", () => {
+    const type2 = `a7-twin-${uid()}`;
+    addCardComponent({name: type2, component: () => <div />});
+    const store = createTestStore();
+
+    const beforeKeys = new Set(Object.keys(cardMappings));
+    withAnonSupport(store, () =>
+      render(
+        <>
+          <Card
+            cardName={{cardType: type2} as any}
+            parentCard="a7-twin-parent"
+          />
+          <Card
+            cardName={{cardType: type2} as any}
+            parentCard="a7-twin-parent"
+          />
+        </>,
+        {wrapper: storeWrapper(store)},
+      ),
+    );
+
+    const newKeys = Object.keys(cardMappings)
+      .filter((k) => !beforeKeys.has(k))
+      .filter((k) => k.includes(type2));
+
+    // A7: useId() gives each instance a unique id — no collision.
+    expect(newKeys.length).toBe(2);
+    expect(new Set(newKeys).size).toBe(2);
+  });
+});
+
+// ── A6 — propEq is a pure comparison with no side effects ────────────────────
+
+describe("A6 — propEq is a pure comparison (side effects moved to useEffect)", () => {
+  it("unrelated dispatch does not trigger debug logging for an unchanged card", async () => {
+    const type = `a6-card-${uid()}`;
+    const renders = makeCountingCard(type);
+    const store = createTestStore({score: 0});
+    _registerCard(type, {cardType: type}, noopReducer);
+
+    render(<Card cardName={type} parentCard="" />, {
+      wrapper: storeWrapper(store),
+    });
+    const rendersBefore = renders.count;
+
+    await act(async () => {
+      store.dispatch({type: "TEST/SET", key: "unrelated", value: 99});
+    });
+
+    // A6: with propEq as a pure gate, no renders should happen for an unchanged card.
+    expect(renders.count).toBe(rendersBefore);
   });
 });
