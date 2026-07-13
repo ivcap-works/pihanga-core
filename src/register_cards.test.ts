@@ -385,3 +385,76 @@ describe("B1 — null prop does not crash _createCardMapping", () => {
     expect(cardMappings[`${outerName}/child`]).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// A8 — memo() cache key uses cardName (unique per instance)
+// ---------------------------------------------------------------------------
+
+describe("A8 — memo cache key is cardName, not cardKey", () => {
+  const makeCtxt = (cardName: string, cardKey?: string) => ({
+    cardName,
+    cardKey,
+    ctxtProps: {},
+    metaCtxtProps: undefined,
+    resolve: (p: any) => p,
+  });
+
+  it("two distinct card instances share no cache slot when both lack a cardKey", () => {
+    const filterFn = vi.fn((s: any) => s.value);
+    const mapperFn = vi.fn((v: number) => v * 2);
+    const memoFn = memo(filterFn, mapperFn);
+
+    const state1 = {value: 10};
+    const state2 = {value: 20};
+
+    memoFn(state1 as any, makeCtxt("card-alpha") as any);
+    // Previously both went to the "-" bucket, so the second call would
+    // thrash card-alpha's cache. Now each has its own slot.
+    memoFn(state2 as any, makeCtxt("card-beta") as any);
+
+    // Force a second call for card-alpha with the same state — must use the cache.
+    memoFn(state1 as any, makeCtxt("card-alpha") as any);
+
+    // mapperFn should have been called only twice (once per unique instance),
+    // not three times (which would happen if the cache was shared).
+    expect(mapperFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("tabular rows with the same cardName are distinguished by cardKey", () => {
+    const filterFn = vi.fn((s: any) => s.value);
+    const mapperFn = vi.fn((v: number) => v * 3);
+    const memoFn = memo(filterFn, mapperFn);
+
+    const state = {value: 5};
+
+    memoFn(state as any, makeCtxt("row-card", "row-1") as any);
+    memoFn(state as any, makeCtxt("row-card", "row-2") as any);
+
+    // Different cardKeys within the same cardName → separate cache slots.
+    expect(mapperFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("repeated call with unchanged filter value returns cached result (no mapper re-run)", () => {
+    let filterCalls = 0;
+    let mapperCalls = 0;
+    const memoFn = memo(
+      (s: any) => {
+        filterCalls++;
+        return s.x;
+      },
+      (v: number) => {
+        mapperCalls++;
+        return v + 1;
+      },
+    );
+
+    const state = {x: 7};
+    const ctx = makeCtxt("stable-card") as any;
+
+    memoFn(state, ctx); // first: filter + mapper
+    memoFn(state, ctx); // second: filter only (same ref → cached)
+
+    expect(filterCalls).toBe(2);
+    expect(mapperCalls).toBe(1); // mapper NOT re-run for same filter value
+  });
+});

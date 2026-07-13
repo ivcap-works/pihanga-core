@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useId, useMemo, useRef} from "react";
 import {useDispatch, useSelector, useStore} from "react-redux";
-import equal from "deep-equal";
+import equal from "fast-deep-equal";
 
 import {getLogger} from "./logger";
 import {
@@ -384,17 +384,8 @@ export function cls_f(
 }
 
 function propEq(oldP: CompProps, newP: CompProps): boolean {
-  const isUnchanged = equal(oldP, newP);
-  // for (const [k, v] of Object.entries(newP)) {
-  //   const ov = oldP[k]
-  //   if (ov !== v) {
-  //     // two empty arrays are considered to be different, but we don't agree :)
-  //     if (!(Array.isArray(v) && !v.length && Array.isArray(ov) && !ov.length)) {
-  //       isUnchanged = false
-  //       break
-  //     }
-  //   }
-  // }
+  // A10: short-circuit on reference equality before the deep comparison.
+  const isUnchanged = oldP === newP || equal(oldP, newP);
   RegisterCardState.changed(newP.cardName, isUnchanged, newP);
   return isUnchanged;
 }
@@ -412,6 +403,8 @@ function renderUnknownCardType(cardType: string): JSX.Element {
 export const UPDATE_STATE_ACTION = "pi/card/update_state";
 
 type CardState = {
+  /** A9: enable the debug state-tracking subsystem (off by default). */
+  setEnabled: (enabled: boolean) => void;
   props: (
     cardName: string,
     cardProps: CompProps,
@@ -433,6 +426,12 @@ function createCardState(): CardState {
   let dispatch: (a: AnyAction) => any;
   let timer: number;
   let lastReport = 0;
+  // A9: off by default; opt-in via StartProps.debugCardState
+  let enabled = false;
+
+  const setEnabled = (flag: boolean) => {
+    enabled = flag;
+  };
 
   // const timer
   const getS = (cardName: string, props: CompProps): S => {
@@ -454,7 +453,6 @@ function createCardState(): CardState {
       clearTimeout(timer);
     }
     timer = window.setTimeout(() => {
-      //logger.debug("... timer went off") // , s, dispatch)
       if (dispatch) {
         const changed = Object.values(s).filter(
           (s) => s.changedAt > lastReport,
@@ -471,6 +469,7 @@ function createCardState(): CardState {
     cardProps: CompProps,
     _dispatch: (a: AnyAction) => any,
   ) => {
+    if (!enabled) return; // A9: no-op when debug is off
     const e = getS(cardName, cardProps);
     e.cardProps = cardProps;
     dispatch = _dispatch;
@@ -478,9 +477,17 @@ function createCardState(): CardState {
   const changed = (
     cardName: string,
     isUnchanged: boolean,
-    props: CompProps,
+    _props: CompProps,
   ) => {
-    const e = getS(cardName, props);
+    if (!enabled) {
+      // A9: still log the debug line when not suppressed by the flag; omit
+      // the state-tracking overhead (getS, timer reset) entirely.
+      if (!isUnchanged) {
+        logger.debug("card has changed:", cardName);
+      }
+      return;
+    }
+    const e = getS(cardName, _props);
     e.reportedAt = Date.now();
     if (!isUnchanged) {
       logger.debug("card has changed:", cardName);
@@ -489,6 +496,7 @@ function createCardState(): CardState {
     }
   };
   const reducer = (state: ReduxState) => {
+    if (!enabled) return; // A9: no-op when debug is off
     const pi = Object.values(s)
       .filter((s) => s.reportedAt > lastReport)
       .reduce(
@@ -510,7 +518,7 @@ function createCardState(): CardState {
     (state.pihanga ??= {}).cards = pi;
     lastReport = Date.now();
   };
-  return {props, changed, reducer};
+  return {props, changed, reducer, setEnabled};
 }
 
 function copySafeProps(props: CompProps): CompProps {

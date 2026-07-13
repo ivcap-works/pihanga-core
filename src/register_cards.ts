@@ -1,4 +1,4 @@
-import equal from "deep-equal";
+import equal from "fast-deep-equal";
 import {getLogger} from "./logger";
 import {
   CSSModuleClasses,
@@ -438,7 +438,15 @@ export function memo<P, T, S extends ReduxState, C = any>(
   const isNotFirst: {[k: string]: boolean} = {};
 
   return (state: S, context: StateMapperContext<C>): T => {
-    const k = context.cardKey || "-";
+    // A8: key by cardName (unique per instance) first, fall back to cardKey
+    // for tabular scenarios where multiple rows share the same cardName.
+    // Previously keying by cardKey || "-" caused all instances without an
+    // explicit cardKey to share a single cache slot, thrashing one another.
+    const k = context.cardName
+      ? context.cardKey
+        ? `${context.cardName}/${context.cardKey}`
+        : context.cardName
+      : context.cardKey || "-";
     const fv = filterF(state, context);
     if (isNotFirst[k] && equal(fv, lastFilter[k])) {
       // nothing changed

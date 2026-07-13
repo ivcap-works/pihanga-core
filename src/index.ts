@@ -37,6 +37,7 @@ import {
   registerPUT,
 } from "./rest";
 import {RootComponent} from "./root";
+import {RegisterCardState} from "./card";
 const logger = getLogger("root");
 
 export type {
@@ -222,6 +223,13 @@ export const DEFAULT_REDUX_STATE = {
 
 export type StartProps = {
   // redux settins
+  /**
+   * A9: Enable the debug card-state subsystem (writes current card props into
+   * `state.pihanga.cards` every second).  Defaults to `false`; opt-in only
+   * when you need the Redux DevTools card view, as it adds a periodic
+   * `produce()` pass over the full state on every card render.
+   */
+  debugCardState?: boolean;
   disableSerializableStateCheck?: boolean;
   disableSerializableActionCheck?: boolean;
   ignoredActions?: string[];
@@ -303,6 +311,9 @@ export function start<S extends Partial<ReduxState>>(
   anyStore.piReducer = piReducer;
 
   dispatchF = store.dispatch;
+
+  // A9: only activate the debug card-state subsystem when explicitly requested.
+  RegisterCardState.setEnabled(props.debugCardState ?? false);
 
   const card = addCard(piReducer.register, dispatchF);
   const updateCard = updateOrRegisterCard(piReducer.register, dispatchF);
