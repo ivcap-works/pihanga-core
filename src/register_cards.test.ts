@@ -337,6 +337,185 @@ describe("metacard metaCard tagging", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Event mapper / metacard event forwarding
+// ---------------------------------------------------------------------------
+
+describe("metacard event mapper — onXxxMapper forwarded from mapper-returned card", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+  const registerCardF: RegisterCardF = (name, params) =>
+    _registerCard(name, params, noopReducer);
+
+  /**
+   * Reproduces the bug where a metacard mapper returns an inner card that
+   * carries `onSelectedMapper` / `onSelected` props, and the metacard's
+   * `events` object uses RAW uppercase keys (as produced by `registerActions`).
+   *
+   * Before the fix:
+   *   - `processEventParameter("onSelectedMapper", ..., { SELECTED: "..." })`
+   *     cannot match "SELECTED" against "onSelectedMapper" → returns false
+   *   - `onSelectedMapper` ends up in `mapping.props` instead of
+   *     `mapping.eventMappers`, causing it to be called as a state mapper in
+   *     `getCardProps` and the event interception never fires.
+   *
+   * After the fix the mc.events keys are normalised to camelCase "on…" form
+   * before being used as `cardEvents`, so `processEventParameter` can match
+   * them correctly.
+   */
+  it("onXxxMapper from the mapper-returned card lands in eventMappers, not props", () => {
+    // 1. Register the inner card type (DropDownMenu-like) with its own events.
+    const innerType = `inner-ddm-${uid()}`;
+    addCardComponent({
+      name: innerType,
+      component: () => null,
+      events: { onSelected: `${innerType}/selected` },
+    });
+
+    // 2. Metacard action constants — uppercase keys, as registerActions produces.
+    const metaType = `meta-cs-${uid()}`;
+    const metaName = `instance-cs-${uid()}`;
+    const META_SELECTED = `${metaType}/selected`;
+    const META_ACTION = { SELECTED: META_SELECTED } as const;
+
+    // 3. Mapper that returns the inner card definition WITH an onSelectedMapper.
+    const mapperFn = (ev: any) => ({ ...ev, type: META_SELECTED });
+    const handlerFn = () => {};
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: () =>
+        ({
+          cardType: innerType,
+          onSelectedMapper: mapperFn,
+          onSelected: handlerFn,
+        }) as any,
+      events: META_ACTION as any,
+    });
+
+    // 4. Register an instance of the metacard.
+    _registerCard(metaName, { cardType: metaType } as any, noopReducer);
+
+    // 5. Assertions — the mapper must live in eventMappers, NOT in props.
+    const mapping = cardMappings[metaName];
+    expect(mapping).toBeDefined();
+
+    // onSelectedMapper must NOT be treated as a regular prop.
+    expect(mapping.props["onSelectedMapper"]).toBeUndefined();
+    // onSelected (handler) must NOT be treated as a regular prop either.
+    expect(mapping.props["onSelected"]).toBeUndefined();
+
+    // The mapper function must be reachable via eventMappers["onSelected"].
+    expect(mapping.eventMappers["onSelected"]).toBe(mapperFn);
+  });
+
+  /**
+   * Reproduces the second part of the metacard event bug: when the consumer of
+   * a metacard supplies an `onSelected` handler at the call site, the handler
+   * must be registered as a reducer for the metacard's action type
+   * (`CONTENT_SELECTOR_ACTION.SELECTED`).
+   *
+   * The mapper internally re-maps the inner card's raw `onSelected` via
+   * `onSelectedMapper` to the metacard's action type.  The consumer's handler
+   * must fire when that remapped action is dispatched with the metacard
+   * instance's `cardID`.
+   */
+  it("consumer's onSelected handler on metacard call-site gets registered as a reducer", () => {
+    const innerType = `inner-cs2-${uid()}`;
+    addCardComponent({
+      name: innerType,
+      component: () => null,
+      events: { onSelected: `${innerType}/selected` },
+    });
+
+    const metaType = `meta-cs2-${uid()}`;
+    const metaName = `instance-cs2-${uid()}`;
+    const META_SELECTED = `${metaType}/selected`;
+    const META_ACTION = { SELECTED: META_SELECTED } as const;
+
+    // Track what action types the reducer was registered for, and with what handler.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const registrations: Array<{ type: string; wrapper: (...args: any[]) => any }> = [];
+    const trackingReducer: PiRegisterReducerF = (
+      eventType,
+      mapper,
+      _priority?,
+      _key?,
+      _targetMapper?,
+    ) => {
+      registrations.push({ type: eventType, wrapper: mapper });
+      return () => {};
+    };
+    const trackingRegisterCardF: RegisterCardF = (name, params) =>
+      _registerCard(name, params, trackingReducer);
+
+    const mapperFn = (ev: any) => ({ ...ev, type: META_SELECTED });
+    registerMetacard(trackingRegisterCardF)({
+      type: metaType,
+      mapper: () =>
+        ({
+          cardType: innerType,
+          onSelectedMapper: mapperFn,
+        }) as any,
+      events: META_ACTION as any,
+    });
+
+    // Consumer passes onSelected handler at call site.
+    const consumerHandler = vi.fn();
+    _registerCard(
+      metaName,
+      { cardType: metaType, onSelected: consumerHandler } as any,
+      trackingReducer,
+    );
+
+    // A reducer for the metacard's action type must have been registered.
+    const metaRegistration = registrations.find((r) => r.type === META_SELECTED);
+    expect(metaRegistration).toBeDefined();
+
+    // The registered wrapper must call consumerHandler when cardID matches.
+    const fakeState = {};
+    const fakeDispatch = vi.fn();
+    const fakeOpts = {} as any;
+    metaRegistration!.wrapper(
+      fakeState,
+      { type: META_SELECTED, cardID: metaName },
+      fakeDispatch,
+      fakeOpts,
+    );
+    expect(consumerHandler).toHaveBeenCalledOnce();
+
+    // Must NOT be called when cardID is a different card.
+    metaRegistration!.wrapper(
+      fakeState,
+      { type: META_SELECTED, cardID: "some-other-card" },
+      fakeDispatch,
+      fakeOpts,
+    );
+    expect(consumerHandler).toHaveBeenCalledOnce(); // still only once
+  });
+
+  it("regular (non-metacard) card still correctly puts onXxxMapper in eventMappers", () => {
+    const cardType = `plain-with-mapper-${uid()}`;
+    const cardName = `plain-mapper-inst-${uid()}`;
+    addCardComponent({
+      name: cardType,
+      component: () => null,
+      events: { onClicked: `${cardType}/clicked` },
+    });
+
+    const myMapper = (ev: any) => ({ ...ev, type: "custom/action" });
+    _createCardMapping(
+      cardName,
+      { cardType, onClickedMapper: myMapper } as any,
+      noopReducer,
+      { onClicked: `${cardType}/clicked` },
+    );
+
+    const mapping = cardMappings[cardName];
+    expect(mapping.props["onClickedMapper"]).toBeUndefined();
+    expect(mapping.eventMappers["onClicked"]).toBe(myMapper);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // B1 — null prop value must not crash _createCardMapping
 // ---------------------------------------------------------------------------
 

@@ -71,7 +71,7 @@ function anonRootOf(name: string): string {
 
 // A1: memoised — Card's own props are stable strings, so React.memo prevents
 // cascade re-renders from parent components re-rendering.
-function CardImpl(props: CardProp): JSX.Element {
+function CardImpl(props: CardProp): React.JSX.Element {
   let cardName: string;
 
   // A7: useId() is stable across StrictMode double-invocations and remounts;
@@ -164,10 +164,20 @@ function CardImpl(props: CardProp): JSX.Element {
 }
 export const Card = React.memo(CardImpl);
 
+/**
+ * Register a Redux reducer for `eventType` while a component is mounted.
+ *
+ * `enabled` (default `true`) lets a call-site unconditionally call this hook
+ * while still skipping the actual registration — all hooks are always called so
+ * React's Rules of Hooks are satisfied, but the `useEffect` body is a no-op
+ * when `enabled` is `false`.  Pass a module-level constant `false` from any
+ * component that never needs the reducer.
+ */
 export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
   eventType: string,
   mapper: ReduceF<S, A>,
   cardName: string,
+  enabled = true,
 ) {
   const store = useStore();
   // A5: always call useId() unconditionally (Rules of Hooks), choose the key afterwards.
@@ -179,6 +189,7 @@ export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
   mapperRef.current = mapper;
 
   useEffect(() => {
+    if (!enabled) return; // all hooks already called above — safe to bail here
     const r = (store as unknown as PiStore).piReducer; // C8: typed via PiStore
     // Wrap in a stable closure that always reads the latest mapper from the ref.
     return r.register(
@@ -187,7 +198,7 @@ export function usePiReducer<S extends ReduxState, A extends ReduxAction>(
       0,
       key,
     );
-  }, [eventType, key, store]); // A5: explicit dep array — no spurious re-registrations
+  }, [enabled, eventType, key, store]); // A5: explicit dep array — no spurious re-registrations
 }
 
 function checkForAnonymousCard(
@@ -255,7 +266,7 @@ const GenericCardComponent = React.memo(
     cardName,
     ctxtProps: props,
     info,
-  }: GenericCardComponentProps): JSX.Element {
+  }: GenericCardComponentProps): React.JSX.Element {
     // Synchronously write ctxtProps to metacard store so sub-cards rendered in
     // the same cycle can read it.
     if (info.mapping.metaCard?.topCard === cardName) {
@@ -305,7 +316,8 @@ const GenericCardComponent = React.memo(
     );
 
     // A2: stable eventMapperResolve — reads from refs, never needs to be recreated.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (NOTE: if eslint-plugin-react-hooks is ever added, exhaustive-deps will
+    // flag this callback; the ref-reads are intentional.)
     const eventMapperResolve = useCallback(
       (prop: any): any => {
         if (typeof prop !== "function") return prop;
@@ -393,14 +405,14 @@ const GenericCardComponent = React.memo(
 // A4: ErrorCard is now a proper React component — no parity hack needed.
 // It has no useSelector subscription so it never re-renders due to store dispatches.
 type ErrorCardComponentProps = {
-  content: JSX.Element;
+  content: React.JSX.Element;
 };
 
-function ErrorCardComponent({ content }: ErrorCardComponentProps): JSX.Element {
+function ErrorCardComponent({ content }: ErrorCardComponentProps): React.JSX.Element {
   return content;
 }
 
-function getCardInfo(cardName: string): [CardInfo?, JSX.Element?] {
+function getCardInfo(cardName: string): [CardInfo?, React.JSX.Element?] {
   const mapping = cardMappings[cardName];
   if (!mapping) {
     return [undefined, renderUnknownCard(cardName)];
@@ -489,8 +501,11 @@ export function cls_f(
   cardComp: string,
   prefix: string = "pi",
 ): (nodeName: string | string[], className?: string) => string {
-  const cn = cardName.replaceAll(/[/:]/g, "_");
-  const cp = cardComp.replaceAll(/[/:]/g, "_");
+  // Sanitise ANY non-CSS-friendly character, not just "/" and ":". Anonymous
+  // card names embed useId(), whose format is version-dependent (":r1:" in
+  // React 18, "«r1»" in React 19) — class names must stay easy to target.
+  const cn = cardName.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  const cp = cardComp.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
   return (nodeName: string | string[], className?: string): string => {
     const na: string[] = typeof nodeName === "string" ? [nodeName] : nodeName;
     const ca = [] as string[];
@@ -498,7 +513,7 @@ export function cls_f(
       ca.push(className);
     }
     na.forEach((n) => {
-      const nn = n.replaceAll(/[/:]/g, "_");
+      const nn = n.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
       ca.push(`${prefix}-${cn}-${nn}`);
       ca.push(`${prefix}-${cp}-${nn}`);
     });
@@ -514,11 +529,11 @@ function propEq(oldP: CompProps, newP: CompProps): boolean {
   return oldP === newP || equal(oldP, newP);
 }
 
-function renderUnknownCard(cardName: string): JSX.Element {
+function renderUnknownCard(cardName: string): React.JSX.Element {
   return <div>Unknown card '{cardName}'</div>;
 }
 
-function renderUnknownCardType(cardType: string): JSX.Element {
+function renderUnknownCardType(cardType: string): React.JSX.Element {
   return <div>Unknown card type '{cardType}'</div>;
 }
 

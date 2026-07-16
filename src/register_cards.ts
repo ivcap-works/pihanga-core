@@ -259,6 +259,37 @@ export function _updateCardMapping(
   return _createCardMapping(name, parameters, registerReducer, mappings.cardEvents);
 }
 
+/**
+ * Normalise a raw action-type map (keys may be UPPER_SNAKE_CASE as produced by
+ * `registerActions`) into the camelCase `on…` format expected by
+ * `processEventParameter`.
+ *
+ * Examples:
+ *   { SELECTED: "ns/selected" }         → { onSelected: "ns/selected" }
+ *   { ITEM_CLICKED: "ns/item-clicked" } → { onItemClicked: "ns/item-clicked" }
+ *   { onSelected: "ns/selected" }       → unchanged (already normalised)
+ */
+function normalizeEventKeys(events: { [k: string]: string } | undefined): {
+  [k: string]: string;
+} {
+  if (!events) return {};
+  return Object.entries(events).reduce(
+    (p, [k, v]) => {
+      if (k.startsWith("on")) {
+        p[k] = v; // already in the correct format
+      } else {
+        const n = k
+          .split("_")
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+          .join("");
+        p[`on${n}`] = v;
+      }
+      return p;
+    },
+    {} as { [k: string]: string },
+  );
+}
+
 function _registerMetadataCard(
   metaName: string,
   parameters: PiCardDef,
@@ -287,7 +318,39 @@ function _registerMetadataCard(
     return result;
   }
   const top = mc.mapper(metaName, parameters, registerCard);
-  _registerCard(metaName, top, registerReducer, mc.events);
+  // Normalise mc.events keys from UPPER_SNAKE_CASE (as produced by
+  // registerActions) to camelCase "on…" form so that processEventParameter
+  // can match "onSelectedMapper" against "onSelected" rather than "SELECTED".
+  const normalizedMcEvents = normalizeEventKeys(mc.events);
+  _registerCard(metaName, top, registerReducer, normalizedMcEvents);
+
+  // Process consumer-level on* event props from the metacard call-site.
+  // The mapper receives `parameters` as `props` for structural/UI decisions,
+  // but any on* handler the consumer attached (e.g. `onSelected`, or an
+  // `onSelectedMapper` overlay) is NOT part of the mapper-returned card
+  // definition. We must register those against the metacard's own events here.
+  const cm = cardMappings[metaName];
+  if (cm && Object.keys(normalizedMcEvents).length > 0) {
+    const extraCancels: PiReducerCancelF[] = [];
+    Object.entries(parameters).forEach(([k, v]) => {
+      if (k === "cardType") return;
+      if (k.startsWith("on")) {
+        processEventParameter(
+          k,
+          v,
+          normalizedMcEvents,
+          cm.eventMappers,
+          registerReducer,
+          metaName,
+          extraCancels,
+        );
+      }
+    });
+    if (extraCancels.length > 0) {
+      cm.reducerCancels = [...(cm.reducerCancels ?? []), ...extraCancels];
+    }
+  }
+
   // Tag the top card itself
   if (cardMappings[metaName]) {
     cardMappings[metaName].metaCard = metaInfo;

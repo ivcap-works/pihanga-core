@@ -119,7 +119,7 @@ Pihanga lets you build UIs by _registering_ self-contained **cards** — indepen
 ## Stack
 
 - **Language**: [TypeScript](https://www.typescriptlang.org/) ^5.0
-- **UI Runtime**: [React](https://react.dev/) ^18 (peer)
+- **UI Runtime**: [React](https://react.dev/) ^18 or ^19 (peer)
 - **State**: [Redux Toolkit](https://redux-toolkit.js.org/) ^2
 - **Routing**: [history](https://github.com/remix-run/history) ^5
 - **Logging**: [tslog](https://tslog.js.org/) ^4
