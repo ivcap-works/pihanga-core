@@ -44,6 +44,8 @@ All public exports are available from `@pihanga2/core`.
 | Export | Description |
 |---|---|
 | `createOnAction<E>(actionType)` | Returns a `(register, handler) => void` registration helper for the given action type |
+| `createOnDispatch<TEvent>(action)` | Returns a typed fire-and-forget `(dispatch, event) => void` sender |
+| `createOnDispatchP<TEvent, TResult>(dispatchAction, awaitAction, errorAction?)` | Returns a typed `(dispatch, event) => Promise<[state, result, dispatch]>` sender that awaits a reply action |
 | `getLogger(name)` | Get a named tslog logger |
 | `cls_f(...classes)` | CSS class name helper |
 | `uuidv7()` | Generate a UUIDv7 string |

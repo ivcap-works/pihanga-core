@@ -180,6 +180,54 @@ register.reducer.registerOneShot<AppState>(
 
 ---
 
+## Fire-and-forget dispatch helpers
+
+These helpers let you trigger a Redux action from outside a reducer (e.g. from a
+React callback, a service, or an async function) in a fully-typed way.
+
+### `createOnDispatch` — typed fire-and-forget
+
+```ts
+import { createOnDispatch } from "@pihanga2/core";
+
+export const dispatchFetchCatalog = createOnDispatch<{ catalogUrlPrefix: string }>(
+  CATALOG_ACTION.FETCH_CATALOG,
+);
+
+// Call anywhere you have a dispatch reference:
+dispatchFetchCatalog(dispatch, { catalogUrlPrefix: "/api/catalog" });
+```
+
+### `createOnDispatchP` — typed request / await-reply
+
+Dispatches an action and returns a `Promise` that resolves when the designated reply
+action is next received.  An optional third argument names an error action that causes
+the promise to reject.
+
+```ts
+import { createOnDispatchP } from "@pihanga2/core";
+
+const dispatchFetchDocument = createOnDispatchP<
+  FetchDocumentEvent,    // shape of the request event
+  DocumentFetchedEvent   // shape of the reply event
+>(
+  CATALOG_ACTION.FETCH_DOCUMENT,   // action to dispatch
+  CATALOG_ACTION.DOCUMENT_FETCHED, // action to await
+  CATALOG_ACTION.FETCH_FAILED,     // (optional) triggers rejection
+);
+
+// Inside an async handler:
+const [state, result, d] = await dispatchFetchDocument(dispatch, { url, catalogID });
+```
+
+!!! note "How it works"
+    `createOnDispatchP` installs a one-shot reducer that listens for `awaitAction`.
+    When that action arrives the Promise resolves with `[currentState, replyEvent, dispatch]`.
+    The reply action **must** include a `_replyTo` field (set automatically by Pihanga's
+    REST layer) — otherwise the one-shot silently skips and waits for the next dispatch.
+
+---
+
 ## `dispatchPipe` — request/reply pattern
 
 `dispatchPipe` (available in `ReduceOpts`) wraps async Redux round-trips with automatic

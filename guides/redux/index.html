@@ -26,7 +26,7 @@
       
       
       <link rel="icon" href="../../img/logo-black.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -34,7 +34,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -844,6 +844,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fire-and-forget-dispatch-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fire-and-forget dispatch helpers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fire-and-forget dispatch helpers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#createondispatch-typed-fire-and-forget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        createOnDispatch — typed fire-and-forget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#createondispatchp-typed-request-await-reply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        createOnDispatchP — typed request / await-reply
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dispatchpipe-requestreply-pattern" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1420,6 +1459,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fire-and-forget-dispatch-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fire-and-forget dispatch helpers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fire-and-forget dispatch helpers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#createondispatch-typed-fire-and-forget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        createOnDispatch — typed fire-and-forget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#createondispatchp-typed-request-await-reply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        createOnDispatchP — typed request / await-reply
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dispatchpipe-requestreply-pattern" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1589,19 +1667,58 @@ The reducer is automatically unregistered when the component unmounts:</p>
 <a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">);</span>
 </code></pre></div>
 <hr />
+<h2 id="fire-and-forget-dispatch-helpers">Fire-and-forget dispatch helpers<a class="headerlink" href="#fire-and-forget-dispatch-helpers" title="Permanent link">&para;</a></h2>
+<p>These helpers let you trigger a Redux action from outside a reducer (e.g. from a
+React callback, a service, or an async function) in a fully-typed way.</p>
+<h3 id="createondispatch-typed-fire-and-forget"><code>createOnDispatch</code> — typed fire-and-forget<a class="headerlink" href="#createondispatch-typed-fire-and-forget" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createOnDispatch</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">dispatchFetchCatalog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createOnDispatch</span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="nx">catalogUrlPrefix</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="p">(</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nx">CATALOG_ACTION</span><span class="p">.</span><span class="nx">FETCH_CATALOG</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">);</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1">// Call anywhere you have a dispatch reference:</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="nx">dispatchFetchCatalog</span><span class="p">(</span><span class="nx">dispatch</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">catalogUrlPrefix</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/catalog&quot;</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<h3 id="createondispatchp-typed-request-await-reply"><code>createOnDispatchP</code> — typed request / await-reply<a class="headerlink" href="#createondispatchp-typed-request-await-reply" title="Permanent link">&para;</a></h3>
+<p>Dispatches an action and returns a <code>Promise</code> that resolves when the designated reply
+action is next received.  An optional third argument names an error action that causes
+the promise to reject.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createOnDispatchP</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">dispatchFetchDocument</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createOnDispatchP</span><span class="o">&lt;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nx">FetchDocumentEvent</span><span class="p">,</span><span class="w">    </span><span class="c1">// shape of the request event</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nx">DocumentFetchedEvent</span><span class="w">   </span><span class="c1">// shape of the reply event</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="o">&gt;</span><span class="p">(</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="nx">CATALOG_ACTION</span><span class="p">.</span><span class="nx">FETCH_DOCUMENT</span><span class="p">,</span><span class="w">   </span><span class="c1">// action to dispatch</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span><span class="nx">CATALOG_ACTION</span><span class="p">.</span><span class="nx">DOCUMENT_FETCHED</span><span class="p">,</span><span class="w"> </span><span class="c1">// action to await</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span><span class="nx">CATALOG_ACTION</span><span class="p">.</span><span class="nx">FETCH_FAILED</span><span class="p">,</span><span class="w">     </span><span class="c1">// (optional) triggers rejection</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">);</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1">// Inside an async handler:</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="kd">const</span><span class="w"> </span><span class="p">[</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">result</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">dispatchFetchDocument</span><span class="p">(</span><span class="nx">dispatch</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="nx">catalogID</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">How it works</p>
+<p><code>createOnDispatchP</code> installs a one-shot reducer that listens for <code>awaitAction</code>.
+When that action arrives the Promise resolves with <code>[currentState, replyEvent, dispatch]</code>.
+The reply action <strong>must</strong> include a <code>_replyTo</code> field (set automatically by Pihanga's
+REST layer) — otherwise the one-shot silently skips and waits for the next dispatch.</p>
+</div>
+<hr />
 <h2 id="dispatchpipe-requestreply-pattern"><code>dispatchPipe</code> — request/reply pattern<a class="headerlink" href="#dispatchpipe-requestreply-pattern" title="Permanent link">&para;</a></h2>
 <p><code>dispatchPipe</code> (available in <code>ReduceOpts</code>) wraps async Redux round-trips with automatic
 timeout and cleanup:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">onButtonClicked</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">_event</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="p">,</span><span class="w"> </span><span class="nx">opts</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nx">opts</span><span class="p">.</span><span class="nx">dispatchPipe</span><span class="p">(</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;FETCH_USER&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">userId</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;123&quot;</span><span class="w"> </span><span class="p">},</span><span class="w">        </span><span class="c1">// request action</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">replyType</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;FETCH_USER_REPLY&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">timeoutMs</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">reply</span><span class="p">)</span><span class="w">   </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">reply</span><span class="p">.</span><span class="nx">user</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// success</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">error</span><span class="p">)</span><span class="w">   </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">error</span><span class="p">.</span><span class="nx">message</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// error</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">timeout</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;timeout&quot;</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// timeout</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="p">);</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">},</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nx">onButtonClicked</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">_event</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="p">,</span><span class="w"> </span><span class="nx">opts</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nx">opts</span><span class="p">.</span><span class="nx">dispatchPipe</span><span class="p">(</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;FETCH_USER&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">userId</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;123&quot;</span><span class="w"> </span><span class="p">},</span><span class="w">        </span><span class="c1">// request action</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">replyType</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;FETCH_USER_REPLY&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">timeoutMs</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">reply</span><span class="p">)</span><span class="w">   </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">reply</span><span class="p">.</span><span class="nx">user</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// success</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">error</span><span class="p">)</span><span class="w">   </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">error</span><span class="p">.</span><span class="nx">message</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// error</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">timeout</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">state</span><span class="p">.</span><span class="nx">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;timeout&quot;</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// timeout</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="p">);</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">;</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="p">},</span>
 </code></pre></div>
         <div id="llms-copy-button" style="position: fixed; z-index: 1100; top: 80px; right: 20px;">
             <button onclick="copyMarkdownToClipboard()" style="cursor: pointer; background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Copy Markdown</button>
@@ -1709,7 +1826,7 @@ timeout and cleanup:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
       
