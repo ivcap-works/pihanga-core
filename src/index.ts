@@ -59,7 +59,13 @@ export type {
   PiRegisterMetaCard,
   WindowProps,
 } from "./types";
-export { registerActions, actionTypesToEvents, createOnAction } from "./redux";
+export {
+  registerActions,
+  actionTypesToEvents,
+  createOnAction,
+  createOnDispatch,
+  createOnDispatchPipe,
+} from "./redux";
 export { Card, usePiReducer, cls_f } from "./card";
 export {
   memo,

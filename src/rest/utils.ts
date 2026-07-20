@@ -1,5 +1,5 @@
 import { current } from "immer";
-import { DispatchF, PiReducer, ReduxAction, ReduxState } from "../types";
+import { DispatchF, PiReducer, ReduxAction, ReduxState, ReplyAction } from "../types";
 import {
   ACTION_TYPES,
   Bindings,
@@ -128,7 +128,7 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
     return state;
   });
 
-  function handleEvent(state: S, action: A, dispatch: DispatchF, ctxt: C): S {
+  function handleEvent(state: S, action: A, dispatch: DispatchF, ctxt: C) {
     if (guard) {
       if (!guard(action, state, dispatch, ctxt)) {
         return state;
@@ -194,16 +194,44 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
           action,
         });
       });
-    return state;
   }
 
   reducer.register<S, ResultAction<A>>(resultType, (state, ra, dispatch) => {
-    return reply(state, ra.content, dispatch, ra);
+    const replyAction = reply(state, ra.content, dispatch, ra);
+    if (replyAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof (replyAction as any).type !== "string") {
+        console.warn(
+          `[pihanga] REST reply handler '${name}' returned a non-action value — expected ReduxAction | void. Return value ignored.`,
+          ra,
+        );
+      } else {
+        const a = (replyAction as ReplyAction)._replyTo
+          ? replyAction
+          : { ...replyAction, _replyTo: ra.request._id };
+        dispatch(a);
+      }
+    }
   });
 
   if (error) {
     reducer.register<S, ErrorAction<A>>(errorType, (state, action, dispatch) => {
-      return error(state, action, action.request, dispatch);
+      const replyAction = error(state, action, action.request, dispatch);
+      if (replyAction) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof (replyAction as any).type !== "string") {
+          console.warn(
+            `[pihanga] REST error handler '${name}' returned a non-action value — expected ReduxAction | void. Return value ignored.`,
+            action.request,
+          );
+        } else {
+          const a =
+            (replyAction as ReplyAction)._replyTo || !action.request._id
+              ? replyAction
+              : { ...replyAction, _replyTo: action.request._id };
+          dispatch(a);
+        }
+      }
     });
   }
 }

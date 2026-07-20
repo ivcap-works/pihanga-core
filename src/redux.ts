@@ -1,6 +1,13 @@
-import { PiRegister } from ".";
+import { PiRegister, register } from ".";
 import { pihanga as logger } from "./logger";
-import { CardAction, ReduceF, ReduxState } from "./types";
+import {
+  CardAction,
+  DispatchF,
+  PiReducerCancelF,
+  ReduceF,
+  ReduxState,
+  ReplyAction,
+} from "./types";
 
 const ns2Actions: { [k: string]: boolean } = {};
 
@@ -90,3 +97,92 @@ export function createOnAction<E>(
     register.reducer.register(actionType, f);
   };
 }
+
+/**
+ * Creates a typed fire-and-forget dispatch function.
+ *
+ * Usage:
+ *   export const dispatchFetchCatalog = createOnDispatch<FetchCatalogEvent>(
+ *     CATALOG_ACTION.FETCH_CATALOG,
+ *   );
+ *   dispatchFetchCatalog(dispatch, { catalogUrlPrefix });
+ */
+export const createOnDispatch =
+  <TEvent extends object>(action: string) =>
+  (d: DispatchF, ev: TEvent): void => {
+    d({ ...ev, type: action });
+  };
+
+/**
+ * Dispatches `dispatchAction` and registers one-shot reducers that call
+ * `onReply` (or optional `onError`) synchronously *inside* the active Immer
+ * `produce()` call when the awaited action arrives.
+ *
+ * Because the callbacks run while the draft is still live, state mutations
+ * are safe — unlike a Promise-based approach where the Immer proxy would
+ * already be revoked by the time an `await` continuation resumes.
+ *
+ * Usage:
+ *   const fetchDocument = createOnDispatchPipe<FetchDocumentEvent, DocumentFetchedEvent, DocumentFetchErrorEvent>(
+ *     CATALOG_ACTION.FETCH_DOCUMENT,
+ *     CATALOG_ACTION.DOCUMENT_FETCHED,
+ *     CATALOG_ACTION.DOCUMENT_FETCH_ERROR,
+ *   );
+ *
+ *   // Inside a reducer — `state` is the live Immer draft, mutations are safe:
+ *   fetchDocument(dispatch, { url, catalogID, documentType },
+ *     (state, result) => { state.document = result.document },
+ *     (state, err)    => { state.error = err.message },
+ *   );
+ */
+export const createOnDispatchPipe =
+  <TEvent extends object, TResult extends object, TError extends object = object>(
+    dispatchAction: string,
+    awaitAction: string,
+    errorAwaitAction?: string,
+  ) =>
+  <S extends ReduxState = ReduxState>(
+    d: DispatchF,
+    ev: TEvent,
+    onReply: ReduceF<S, TResult & ReplyAction>,
+    onError?: ReduceF<S, TError & ReplyAction>,
+  ): void => {
+    const evID = d({ ...ev, type: dispatchAction });
+
+    function isReply(a: ReplyAction): boolean {
+      const replyTo = a._replyTo;
+      if (!replyTo) {
+        console.warn("action is not a ReplyAction", a);
+        return false;
+      }
+      return replyTo === evID;
+    }
+
+    register((r) => {
+      let ec: PiReducerCancelF | null = null;
+      const rc = r.reducer.registerOneShot<S, TResult & ReplyAction>(
+        awaitAction,
+        (s, a, d, opts) => {
+          if (!isReply(a)) return false;
+          if (ec) ec();
+          onReply(s, a, d, opts);
+          return true;
+        },
+        0,
+        evID,
+      );
+      if (errorAwaitAction && onError) {
+        ec = r.reducer.registerOneShot<S, TError & ReplyAction>(
+          errorAwaitAction,
+          (s, a, d, opts) => {
+            if (!isReply(a)) return false;
+            rc();
+            onError(s, a, d, opts);
+            return true;
+          },
+          0,
+          evID,
+        );
+      }
+    });
+  };

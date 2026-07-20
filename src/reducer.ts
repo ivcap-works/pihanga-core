@@ -12,7 +12,7 @@ import {
   ReduxAction,
   ReduxState,
 } from "./types";
-import { produce } from "immer";
+import { produce, isDraft, current } from "immer";
 import { RegisterCardState, UPDATE_STATE_ACTION } from "./card";
 import StackTrace from "stacktrace-js";
 import { getLogger } from "./logger";
@@ -59,6 +59,7 @@ export function createReducer(
 
   const delayedDispatcher: DispatchF = (a: any): string => {
     const id = ensureId(a);
+    deproxyAction(a);
     setTimeout(() => dispatcher(a), 0);
     return id;
   };
@@ -328,6 +329,7 @@ export function createReducer(
     registerOneShot,
     dispatch: (a: any): string => {
       const id = ensureId(a);
+      deproxyAction(a);
       dispatcher(a);
       return id;
     },
@@ -335,6 +337,26 @@ export function createReducer(
   };
 
   return [reducer, piReducer];
+}
+
+/**
+ * Recursively walk an action (or any plain object/array) and replace every
+ * Immer draft encountered with its plain `current()` snapshot.  Plain objects
+ * and arrays that are NOT drafts are descended into so nested drafts are also
+ * caught.
+ */
+function deproxyAction(a: Record<string, any> | any[]): void {
+  const entries: [string | number, any][] = Array.isArray(a)
+    ? a.map((v, i) => [i, v])
+    : Object.keys(a).map((k) => [k, (a as Record<string, any>)[k]]);
+
+  for (const [key, val] of entries) {
+    if (isDraft(val)) {
+      (a as any)[key] = current(val);
+    } else if (val !== null && typeof val === "object") {
+      deproxyAction(val);
+    }
+  }
 }
 
 function removeReducer(key: string | undefined, m: ReducerDef<ReduxState, Action>[]) {
@@ -370,7 +392,7 @@ function _reduce(
         }
       }
     } catch (err: any) {
-      logger.error(err.message, m.definedIn);
+      logger.error(err.message, action, m);
     }
   });
   return consumed;

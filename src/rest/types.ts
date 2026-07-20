@@ -64,8 +64,18 @@ export type RegisterGenericProps<
   context?: (action: A, state: S) => Promise<C> | null;
   guard?: (action: A, state: S, dispatcher: DispatchF, context: C) => boolean;
   headers?: (action: A, state: S, context: C) => { [key: string]: string };
-  reply: (state: S, reply: R, dispatcher: DispatchF, result: ResultAction<A>) => void;
-  error?: (state: S, error: ErrorAction<A>, requestAction: A, dispatch: DispatchF) => S;
+  reply: (
+    state: S,
+    reply: R,
+    dispatcher: DispatchF,
+    result: ResultAction<A>,
+  ) => ReduxAction | void;
+  error?: (
+    state: S,
+    error: ErrorAction<A>,
+    requestAction: A,
+    dispatch: DispatchF,
+  ) => ReduxAction | void;
 };
 
 export type PiRegisterGetProps<
