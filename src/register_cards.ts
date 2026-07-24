@@ -1,9 +1,7 @@
 import equal from "fast-deep-equal";
 import { getLogger } from "./logger";
 import {
-  CSSModuleClasses,
   CardAction,
-  CardProp,
   DispatchF,
   GenericCardParameterT,
   MetaCardMapperF,
@@ -17,10 +15,8 @@ import {
   PiReducerCancelF,
   ReduxState,
   RegisterCardF,
-  StateMapper,
   StateMapperContext,
 } from "./types";
-import { Action, AnyAction, Dispatch } from "@reduxjs/toolkit";
 
 const logger = getLogger("card-register");
 
@@ -322,7 +318,14 @@ function _registerMetadataCard(
   // registerActions) to camelCase "on…" form so that processEventParameter
   // can match "onSelectedMapper" against "onSelected" rather than "SELECTED".
   const normalizedMcEvents = normalizeEventKeys(mc.events);
-  _registerCard(metaName, top, registerReducer, normalizedMcEvents);
+  // Merge the inner (top) card type's own events with the metacard's events so
+  // that on* props in the mapper-returned card which reference the inner card's
+  // event names (e.g. onClickedMapper) are correctly separated from plain props.
+  // The metacard's events take precedence (spread last) so they always win if
+  // both define the same key.
+  const topCardType = resolveCardType(top.cardType);
+  const combinedEvents = { ...(topCardType?.events ?? {}), ...normalizedMcEvents };
+  _registerCard(metaName, top, registerReducer, combinedEvents);
 
   // Process consumer-level on* event props from the metacard call-site.
   // The mapper receives `parameters` as `props` for structural/UI decisions,
@@ -520,9 +523,9 @@ function processEventParameter(
  * @typeParam C The type of specific context this card is being used with (primarily relevant for tables).
  * @returns The result of `mapF` if the result of `filterF` has changed, otherwise returns a previous result of `mapF`
  */
-export function memo<P, T, S extends ReduxState, C = any>(
+export function memo<P, T, S extends ReduxState, C = unknown>(
   filterF: (state: S, context: StateMapperContext<C>) => P,
-  mapperF: (partial: P, context: StateMapperContext<C>, state: S) => T,
+  mapperF: (partial: P, context: StateMapperContext<C>, state: S, lastValue: T) => T,
 ): (state: S, context: StateMapperContext<C>) => T {
   const lastFilter: { [k: string]: P } = {};
   const lastValue: { [k: string]: T } = {};
@@ -544,7 +547,7 @@ export function memo<P, T, S extends ReduxState, C = any>(
       return lastValue[k];
     }
     lastFilter[k] = fv;
-    const v = mapperF(fv, context, state);
+    const v = mapperF(fv, context, state, lastValue[k]);
     lastValue[k] = v;
     isNotFirst[k] = true;
     return v;

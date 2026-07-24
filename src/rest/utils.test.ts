@@ -6,6 +6,15 @@
  * for direct unit testing.
  */
 import { describe, it, expect } from "vitest";
+import { vi } from "vitest";
+// rest/types.ts calls registerActions() at module level.
+// registerActions lives in redux.ts, which imports `register` from ".." (src/index.ts).
+// src/index.ts imports from src/router.ts, which imports back from src/redux.ts —
+// creating a cycle that makes registerActions undefined at initialisation time.
+// Mocking the index module breaks the cycle; `register` is only used inside
+// function bodies so this is safe for all tests in this file.
+vi.mock("../index", () => ({}));
+
 import { createErrorAction, parseResponse } from "./utils";
 import { ErrorKind, HttpResponse } from "./types";
 import { RestContentType } from "./enums";
@@ -324,5 +333,104 @@ describe("B8 — HttpResponse.headers is a serialisable plain string object", ()
 
     expect(roundTripped["x-custom"]).toBe("hello world");
     expect(roundTripped["accept"]).toBe("application/json");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createErrorAction — additional HTTP status code coverage
+// ---------------------------------------------------------------------------
+
+describe("createErrorAction – additional status codes map to ErrorKind.Other", () => {
+  const req = { type: "FETCH" };
+
+  it.each([
+    [400, "Bad Request"],
+    [408, "Request Timeout"],
+    [409, "Conflict"],
+    [410, "Gone"],
+    [422, "Unprocessable Entity"],
+    [429, "Too Many Requests"],
+    [500, "Internal Server Error"],
+    [502, "Bad Gateway"],
+    [503, "Service Unavailable"],
+    [504, "Gateway Timeout"],
+  ])("maps HTTP %i (%s) to ErrorKind.Other", (statusCode) => {
+    const action = createErrorAction(
+      "TEST_ERROR",
+      makeHttpResponse(statusCode),
+      "test-call",
+      EXAMPLE_URL,
+      req,
+    );
+    expect(action.error).toBe(ErrorKind.Other);
+  });
+});
+
+describe("createErrorAction – statusCode is preserved in the action", () => {
+  it("the statusCode field in the action matches the response status", () => {
+    for (const code of [400, 401, 403, 404, 500, 503]) {
+      const action = createErrorAction(
+        "ERR",
+        makeHttpResponse(code),
+        "check",
+        EXAMPLE_URL,
+        { type: "FETCH" },
+      );
+      expect(action.statusCode).toBe(code);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseResponse — additional edge cases
+// ---------------------------------------------------------------------------
+
+describe("parseResponse – additional content-type edge cases", () => {
+  it("returns Blob for 'application/ld+json' (not in the recognised-JSON allowlist)", async () => {
+    // The implementation only treats 'application/json' as Object; all other
+    // application/* subtypes fall through to the Blob branch.
+    const body = { "@context": "https://schema.org", name: "test" };
+    const response = new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/ld+json" },
+    });
+
+    const [_content, contentType, mimeType] = await parseResponse(response);
+
+    expect(contentType).toBe(RestContentType.Blob);
+    expect(mimeType).toBe("application/ld+json");
+  });
+
+  it("parses an empty JSON object body correctly", async () => {
+    const response = new Response("{}", {
+      headers: { "content-type": "application/json" },
+    });
+
+    const [content, contentType] = await parseResponse(response);
+
+    expect(contentType).toBe(RestContentType.Object);
+    expect(content).toEqual({});
+  });
+
+  it("parses a JSON array body correctly", async () => {
+    const body = [1, 2, 3];
+    const response = new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+    });
+
+    const [content] = await parseResponse(response);
+
+    expect(content).toEqual([1, 2, 3]);
+  });
+
+  it("parses 'text/csv' as plain text (general text/* branch)", async () => {
+    const csv = "id,name\n1,Alice\n2,Bob";
+    const response = new Response(csv, {
+      headers: { "content-type": "text/csv" },
+    });
+
+    const [content, contentType] = await parseResponse(response);
+
+    expect(contentType).toBe(RestContentType.Text);
+    expect(content).toBe(csv);
   });
 });

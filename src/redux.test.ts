@@ -5,8 +5,14 @@
  * easy to exercise directly and their behaviour is very important for the rest
  * of the framework.
  */
-import { describe, it, expect } from "vitest";
-import { registerActions, actionTypesToEvents } from "./redux";
+import { describe, it, expect, vi } from "vitest";
+// redux.ts has `import { PiRegister, register } from "."` which creates a
+// circular dep:  redux.ts → index.ts → router.ts → redux.ts
+// `register` is only used inside function bodies (never at module level) so
+// mocking index.ts as an empty object is safe for all tests in this file.
+vi.mock("./index", () => ({}));
+
+import { registerActions, actionTypesToEvents, createOnDispatch } from "./redux";
 
 // ---------------------------------------------------------------------------
 // registerActions
@@ -87,5 +93,72 @@ describe("actionTypesToEvents", () => {
     const events = actionTypesToEvents(A);
     expect(events.onSave).toBe("test/roundtrip/save");
     expect(events.onLoadData).toBe("test/roundtrip/load_data");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createOnDispatch
+// ---------------------------------------------------------------------------
+
+describe("createOnDispatch", () => {
+  it("returns a callable function", () => {
+    const fn = createOnDispatch("SOME/ACTION");
+    expect(typeof fn).toBe("function");
+  });
+
+  it("calls dispatch exactly once per invocation", () => {
+    const dispatch = vi.fn();
+    createOnDispatch("PING")(dispatch, {});
+    expect(dispatch).toHaveBeenCalledOnce();
+  });
+
+  it("merges the event payload with the action type", () => {
+    const dispatch = vi.fn();
+    createOnDispatch<{ id: string; value: number }>("ITEM/SEND")(dispatch, {
+      id: "x",
+      value: 42,
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: "ITEM/SEND", id: "x", value: 42 });
+  });
+
+  it("uses the exact action string provided as the type", () => {
+    const dispatch = vi.fn();
+    createOnDispatch("my/exact/action/type")(dispatch, {});
+    expect(dispatch.mock.calls[0][0].type).toBe("my/exact/action/type");
+  });
+
+  it("works with an empty event payload", () => {
+    const dispatch = vi.fn();
+    createOnDispatch("EMPTY/EVENT")(dispatch, {});
+    expect(dispatch).toHaveBeenCalledWith({ type: "EMPTY/EVENT" });
+  });
+
+  it("does not mutate the original event object", () => {
+    const dispatch = vi.fn();
+    const event = { count: 7 };
+    createOnDispatch<{ count: number }>("COUNT/ADD")(dispatch, event);
+    // The 'type' key must not be injected into the caller's object
+    expect(Object.prototype.hasOwnProperty.call(event, "type")).toBe(false);
+    expect(event.count).toBe(7);
+  });
+
+  it("each call to the returned function dispatches independently", () => {
+    const dispatch = vi.fn();
+    const doFoo = createOnDispatch<{ n: number }>("FOO");
+    doFoo(dispatch, { n: 1 });
+    doFoo(dispatch, { n: 2 });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch.mock.calls[0][0]).toEqual({ type: "FOO", n: 1 });
+    expect(dispatch.mock.calls[1][0]).toEqual({ type: "FOO", n: 2 });
+  });
+
+  it("multiple independently created dispatchers use their own action types", () => {
+    const dispatch = vi.fn();
+    const doA = createOnDispatch("NS/ACTION_A");
+    const doB = createOnDispatch("NS/ACTION_B");
+    doA(dispatch, {});
+    doB(dispatch, {});
+    expect(dispatch.mock.calls[0][0].type).toBe("NS/ACTION_A");
+    expect(dispatch.mock.calls[1][0].type).toBe("NS/ACTION_B");
   });
 });

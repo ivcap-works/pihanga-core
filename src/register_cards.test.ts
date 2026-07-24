@@ -9,13 +9,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
   _createCardMapping,
   _registerCard,
+  _updateCard,
   addCardComponent,
   cardMappings,
   cardTypes,
   createCardDeclaration,
+  createCardDeclaration2,
   isCardRef,
   memo,
   registerMetacard,
+  removeCardMapping,
+  resolveCardType,
 } from "./register_cards";
 import {
   PiRegisterReducerF,
@@ -492,6 +496,68 @@ describe("metacard event mapper — onXxxMapper forwarded from mapper-returned c
     expect(consumerHandler).toHaveBeenCalledOnce(); // still only once
   });
 
+  /**
+   * Demonstrates the bug where the mapper-returned card carries `on*` props
+   * that match the **inner card type's** events (not the metacard's events).
+   *
+   * Scenario:
+   *   - Inner card type has event `onClicked` → "inner/clicked"
+   *   - Metacard has a DIFFERENT event `onButtonClicked` → "meta/button-clicked"
+   *   - The mapper returns `{ cardType: innerType, onClickedMapper: remapFn }`
+   *     to intercept the raw button click and re-dispatch as the metacard action.
+   *
+   * Bug (before fix):
+   *   `_registerCard(metaName, top, registerReducer, normalizedMcEvents)` is
+   *   called with `overrideEvents = { onButtonClicked: "meta/button-clicked" }`.
+   *   Inside `_createCardMapping`, `cardEvents` only contains the metacard events,
+   *   so `processEventParameter("onClickedMapper", ...)` finds no matching entry
+   *   and `onClickedMapper` silently falls through into `mapping.props` instead of
+   *   `mapping.eventMappers`.
+   *
+   * Expected (after fix):
+   *   The inner card type's events are also considered when processing the
+   *   mapper-returned top card's `on*` props, so `onClickedMapper` correctly
+   *   lands in `mapping.eventMappers["onClicked"]`.
+   */
+  it("BUG: onXxxMapper on mapper-returned card using inner card's event name ends up in eventMappers, not props", () => {
+    const innerType = `inner-btn-${uid()}`;
+    // Inner card type has its own "onClicked" event.
+    addCardComponent({
+      name: innerType,
+      component: () => null,
+      events: { onClicked: `${innerType}/clicked` },
+    });
+
+    const metaType = `meta-btn-${uid()}`;
+    const metaName = `instance-btn-${uid()}`;
+    // Metacard has a DIFFERENT event name — "onButtonClicked" — to prove the bug.
+    const META_BTN_CLICKED = `${metaType}/button-clicked`;
+
+    // The mapper returns the inner card WITH an onClickedMapper that remaps
+    // the inner card's raw "clicked" action to the metacard's action type.
+    const remapFn = (ev: any) => ({ ...ev, type: META_BTN_CLICKED });
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: () =>
+        ({
+          cardType: innerType,
+          onClickedMapper: remapFn,
+        }) as any,
+      events: { onButtonClicked: META_BTN_CLICKED } as any,
+    });
+
+    _registerCard(metaName, { cardType: metaType } as any, noopReducer);
+
+    const mapping = cardMappings[metaName];
+    expect(mapping).toBeDefined();
+
+    // onClickedMapper must NOT fall through to regular props.
+    expect(mapping.props["onClickedMapper"]).toBeUndefined();
+    // It must be in eventMappers under the inner card's event name "onClicked",
+    // so that card.tsx can intercept the inner card's dispatch and remap it.
+    expect(mapping.eventMappers["onClicked"]).toBe(remapFn);
+  });
+
   it("regular (non-metacard) card still correctly puts onXxxMapper in eventMappers", () => {
     const cardType = `plain-with-mapper-${uid()}`;
     const cardName = `plain-mapper-inst-${uid()}`;
@@ -632,5 +698,199 @@ describe("A8 — memo cache key is cardName, not cardKey", () => {
 
     expect(filterCalls).toBe(2);
     expect(mapperCalls).toBe(1); // mapper NOT re-run for same filter value
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createCardDeclaration2 — typed dynamic/static split
+// ---------------------------------------------------------------------------
+
+describe("createCardDeclaration2", () => {
+  it("adds cardType to the returned PiCardDef", () => {
+    const Card = createCardDeclaration2<{ value: number }, { label: string }>("ui/split");
+    const def = Card({ value: 1, label: "hi" } as any);
+    expect(def.cardType).toBe("ui/split");
+  });
+
+  it("preserves all dynamic and static props in the output", () => {
+    const Card = createCardDeclaration2<{ count: number }, { name: string }>("ui/mixed");
+    const def = Card({ count: 42, name: "test" } as any);
+    expect((def as any).count).toBe(42);
+    expect((def as any).name).toBe("test");
+  });
+
+  it("the declared cardType always wins over any prop value", () => {
+    const Card = createCardDeclaration2("ui/canonical");
+    const def = Card({ cardType: "ui/override" } as any);
+    expect(def.cardType).toBe("ui/canonical");
+  });
+
+  it("two declarations for different types produce independent factories", () => {
+    const A = createCardDeclaration2<{ x: number }, {}>("ns/cd2-a");
+    const B = createCardDeclaration2<{}, { y: string }>("ns/cd2-b");
+    expect(A({ x: 1 } as any).cardType).toBe("ns/cd2-a");
+    expect(B({ y: "hello" } as any).cardType).toBe("ns/cd2-b");
+  });
+
+  it("works with an empty props object", () => {
+    const Card = createCardDeclaration2("ui/empty");
+    const def = Card({} as any);
+    expect(def.cardType).toBe("ui/empty");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeCardMapping — cleanup of named and child mappings
+// ---------------------------------------------------------------------------
+
+describe("removeCardMapping", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+
+  it("removes the named card mapping", () => {
+    const type = `rm-plain-${uid()}`;
+    const name = `rm-inst-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+    _registerCard(name, { cardType: type }, noopReducer);
+    expect(cardMappings[name]).toBeDefined();
+
+    removeCardMapping(name);
+    expect(cardMappings[name]).toBeUndefined();
+  });
+
+  it("removes child card mappings (name/key prefix) but not unrelated cards", () => {
+    const outerType = `rm-outer-${uid()}`;
+    const innerType = `rm-inner-${uid()}`;
+    const outerName = `rm-outer-inst-${uid()}`;
+    const siblingName = `rm-sibling-${uid()}`;
+    addCardComponent({ name: outerType, component: () => null });
+    addCardComponent({ name: innerType, component: () => null });
+
+    // Register the outer card with a nested child card ref.
+    _createCardMapping(
+      outerName,
+      { cardType: outerType, child: { cardType: innerType } } as any,
+      noopReducer,
+      {},
+    );
+    // Register a completely separate card that must survive the removal.
+    _registerCard(siblingName, { cardType: innerType }, noopReducer);
+
+    const childKey = `${outerName}/child`;
+    expect(cardMappings[outerName]).toBeDefined();
+    expect(cardMappings[childKey]).toBeDefined();
+    expect(cardMappings[siblingName]).toBeDefined();
+
+    removeCardMapping(outerName);
+
+    expect(cardMappings[outerName]).toBeUndefined();
+    expect(cardMappings[childKey]).toBeUndefined();
+    // Sibling (unrelated card) must survive
+    expect(cardMappings[siblingName]).toBeDefined();
+  });
+
+  it("calls the reducer cancel functions for the removed card's event handlers", () => {
+    const type = `rm-cancel-${uid()}`;
+    const name = `rm-cancel-inst-${uid()}`;
+    const cancelFn = vi.fn();
+    const trackingReducer = ((_: any, __: any) =>
+      cancelFn) as unknown as PiRegisterReducerF;
+    addCardComponent({
+      name: type,
+      component: () => null,
+      events: { onClick: `${type}/click` },
+    });
+
+    _createCardMapping(
+      name,
+      { cardType: type, onClick: () => {} } as any,
+      trackingReducer,
+      { onClick: `${type}/click` },
+    );
+
+    removeCardMapping(name);
+    expect(cancelFn).toHaveBeenCalled();
+  });
+
+  it("is idempotent — calling it twice on the same name does not throw", () => {
+    const type = `rm-idm-${uid()}`;
+    const name = `rm-idm-inst-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+    _registerCard(name, { cardType: type }, noopReducer);
+
+    expect(() => {
+      removeCardMapping(name);
+      removeCardMapping(name); // second call on an already-removed key must not throw
+    }).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _updateCard — merging new props onto an existing card mapping
+// ---------------------------------------------------------------------------
+
+describe("_updateCard", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+
+  it("registers a new card when no previous mapping exists", () => {
+    const type = `upd-new-${uid()}`;
+    const name = `upd-new-inst-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+
+    _updateCard(name, { cardType: type, label: "initial" } as any, noopReducer);
+    expect(cardMappings[name]).toBeDefined();
+    expect(cardMappings[name].props["label"]).toBe("initial");
+  });
+
+  it("merges new props onto the existing mapping without losing unchanged props", () => {
+    const type = `upd-merge-${uid()}`;
+    const name = `upd-merge-inst-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+
+    _registerCard(name, { cardType: type, a: "first", b: "keep" } as any, noopReducer);
+    _updateCard(name, { a: "updated" } as any, noopReducer);
+
+    expect(cardMappings[name].props["a"]).toBe("updated");
+    expect(cardMappings[name].props["b"]).toBe("keep");
+  });
+
+  it("new props added via _updateCard are visible in the mapping", () => {
+    const type = `upd-add-${uid()}`;
+    const name = `upd-add-inst-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+
+    _registerCard(name, { cardType: type } as any, noopReducer);
+    _updateCard(name, { extra: "newvalue" } as any, noopReducer);
+
+    expect(cardMappings[name].props["extra"]).toBe("newvalue");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveCardType — component lookup with optional framework fallback
+// ---------------------------------------------------------------------------
+
+describe("resolveCardType", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+
+  it("returns the registered component for a known card type", () => {
+    const name = `resolve-${uid()}`;
+    const component = () => null;
+    addCardComponent({ name, component });
+    const resolved = resolveCardType(name);
+    expect(resolved).toBeDefined();
+    expect(resolved!.component).toBe(component);
+  });
+
+  it("returns undefined for an unknown card type", () => {
+    expect(resolveCardType(`no-such-type-${uid()}`)).toBeUndefined();
+  });
+
+  it("the resolved component includes the events map when one was registered", () => {
+    const name = `resolve-events-${uid()}`;
+    const events = { onClick: "test/click" };
+    addCardComponent({ name, component: () => null, events });
+    expect(resolveCardType(name)!.events).toEqual(events);
   });
 });
