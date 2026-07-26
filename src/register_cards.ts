@@ -92,7 +92,11 @@ export function registerMetacard(registerCard: RegisterCardF) {
   function f<C>(declaration: PiRegisterMetaCard) {
     const { type, mapper, events } = declaration;
     if (metacardTypes[type]) {
-      logger.warn(`Overwriting definition for meta card type "${type}"`);
+      const msg = `Overwriting definition for meta card type "${type}" — this is almost certainly a bug (duplicate type string).`;
+      if (process.env.NODE_ENV !== "production") {
+        throw new Error(msg);
+      }
+      logger.warn(msg);
     }
     logger.debug(`Register meta card type "${type}"`); // C8
     metacardTypes[type] = { type, registerCard, mapper, events };
@@ -106,7 +110,7 @@ export function addCard(
 ) {
   // to be used by dynamically registered cards
   dispatch2registerReducer.push([dispatchF, registerReducer]);
-  return (name: string, parameters: PiCardDef): PiCardRef => {
+  return (name: string, parameters: PiCardDef): string => {
     return _registerCard(name, parameters, registerReducer);
   };
 }
@@ -117,10 +121,7 @@ export function updateOrRegisterCard(
 ) {
   // to be used by dynamically registered cards
   dispatch2registerReducer.push([dispatchF, registerReducer]);
-  return (
-    name: string,
-    parameters: { [key: string]: GenericCardParameterT },
-  ): PiCardRef => {
+  return (name: string, parameters: { [key: string]: GenericCardParameterT }): string => {
     return _updateCard(name, parameters, registerReducer);
   };
 }
@@ -130,7 +131,7 @@ export function _registerCard(
   parameters: PiCardDef,
   registerReducer: PiRegisterReducerF,
   overrideEvents?: { [key: string]: string },
-): PiCardRef {
+): string {
   if (cardMappings[name]) {
     logger.warn(`Overwriting definition for card "${name}"`);
   }
@@ -155,7 +156,7 @@ export function _updateCard(
   parameters: { [key: string]: GenericCardParameterT },
   registerReducer: PiRegisterReducerF,
   overrideEvents?: { [key: string]: string },
-): PiCardRef {
+): string {
   const mappings = cardMappings[name];
   if (!mappings) {
     // first time
@@ -189,6 +190,15 @@ export function _createCardMapping(
       const cd = v as PiCardDef;
       const cardName = `${name}/${k}`;
       v = _registerCard(cardName, cd, registerReducer);
+    } else if (Array.isArray(v) && v.some(isCardRef)) {
+      // Warn when an array prop contains unregistered card declarations.
+      // Array elements are NOT auto-registered — they must be registered
+      // individually via registerCard() inside a meta card mapper and the
+      // resulting card name strings stored in the array instead.
+      logger.warn(
+        `Card "${name}" prop "${k}" is an array containing card declarations that will not be registered. ` +
+          `Register each card via registerCard() and store the returned name string in the array instead.`,
+      );
     }
     if (
       k.startsWith("on") &&
@@ -305,7 +315,7 @@ function _registerMetadataCard(
   // Intercept sub-card registration to tag each sub-card with metacard info.
   // We don't overwrite if the sub-card is itself a metacard (it will have set
   // its own metaCard info).
-  function registerCard(name: string, parameters: PiCardDef): PiCardRef {
+  function registerCard(name: string, parameters: PiCardDef): string {
     const n = `${metaName}/${name}`;
     const result = mc.registerCard(n, parameters);
     if (cardMappings[n] && !cardMappings[n].metaCard) {

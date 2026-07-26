@@ -93,13 +93,10 @@ export type { ShowPageEvent, NavigateToPageEvent } from "./router";
 export interface PiRegister {
   //window(parameters: PiCardDef): PiCardRef
 
-  window<S extends ReduxState>(parameters: PiMapProps<WindowProps, S, {}>): PiCardRef;
+  window<S extends ReduxState>(parameters: PiMapProps<WindowProps, S, {}>): string;
 
-  card(name: string, parameters: PiCardDef): PiCardRef;
-  updateCard(
-    name: string,
-    parameters: { [key: string]: GenericCardParameterT },
-  ): PiCardRef;
+  card(name: string, parameters: PiCardDef): string;
+  updateCard(name: string, parameters: { [key: string]: GenericCardParameterT }): string;
 
   cardComponent(declaration: PiRegisterComponent): void;
 
@@ -322,7 +319,7 @@ export function start<S extends Partial<ReduxState>>(
 
   const card = addCard(piReducer.register, dispatchF);
   const updateCard = updateOrRegisterCard(piReducer.register, dispatchF);
-  const window = <S extends ReduxState>(p: PiMapProps<WindowProps, S, {}>): PiCardRef => {
+  const window = <S extends ReduxState>(p: PiMapProps<WindowProps, S, {}>): string => {
     return card("_window", { cardType: "framework", ...p });
   };
 

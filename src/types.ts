@@ -307,7 +307,7 @@ export type PiRegisterMetaCard = {
   events?: { [key: string]: string };
 };
 
-export type RegisterCardF = (name: string, parameters: PiCardDef) => PiCardRef;
+export type RegisterCardF = (name: string, parameters: PiCardDef) => string;
 export type MetaCardMapperF = (
   name: string,
   props: any,
