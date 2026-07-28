@@ -69,6 +69,7 @@ export {
 export { Card, usePiReducer, cls_f } from "./card";
 export {
   memo,
+  mapProp,
   createCardDeclaration,
   createCardDeclaration2,
   isCardRef,

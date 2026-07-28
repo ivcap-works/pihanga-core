@@ -8,6 +8,7 @@ import {
   EventMapperFn,
   PiCardDef,
   PiCardRef,
+  PiDefCtxtProps,
   PiMapProps,
   PiRegisterComponent,
   PiRegisterMetaCard,
@@ -15,6 +16,7 @@ import {
   PiReducerCancelF,
   ReduxState,
   RegisterCardF,
+  StateMapper,
   StateMapperContext,
 } from "./types";
 
@@ -191,14 +193,16 @@ export function _createCardMapping(
       const cardName = `${name}/${k}`;
       v = _registerCard(cardName, cd, registerReducer);
     } else if (Array.isArray(v) && v.some(isCardRef)) {
-      // Warn when an array prop contains unregistered card declarations.
-      // Array elements are NOT auto-registered — they must be registered
-      // individually via registerCard() inside a meta card mapper and the
-      // resulting card name strings stored in the array instead.
-      logger.warn(
-        `Card "${name}" prop "${k}" is an array containing card declarations that will not be registered. ` +
-          `Register each card via registerCard() and store the returned name string in the array instead.`,
-      );
+      // Auto-register any inline card declarations found inside array props,
+      // replacing each PiCardDef with the registered name string — consistent
+      // with how scalar card-ref props are handled above.
+      v = (v as unknown[]).map((el, i) => {
+        if (isCardRef(el)) {
+          const childName = `${name}/${k}/${i}`;
+          return _registerCard(childName, el as PiCardDef, registerReducer);
+        }
+        return el;
+      });
     }
     if (
       k.startsWith("on") &&
@@ -562,4 +566,33 @@ export function memo<P, T, S extends ReduxState, C = unknown>(
     isNotFirst[k] = true;
     return v;
   };
+}
+
+/**
+ * Generic memoised mapper: resolves a `StateMapper<T[]>` prop then maps each
+ * element to `U`.  Useful inside metacard mappers to transform an array prop
+ * (which may be a plain value or a state selector) into a derived array without
+ * allocating a new array on every render cycle.
+ *
+ * @example
+ * ```ts
+ * ToggleGroup({
+ *   items: mapProp(props.navLinks, (id) => ({
+ *     value: id,
+ *     label: id.toUpperCase(),
+ *   })),
+ * })
+ * ```
+ *
+ * @param prop   A prop that is either a plain `T[]` value or a `StateMapper<T[]>`.
+ * @param mapFn  Per-element transform from `T` to `U`.
+ */
+export function mapProp<T, U, S extends ReduxState = ReduxState, C = PiDefCtxtProps>(
+  prop: StateMapper<T[], S, C>,
+  mapFn: (item: T) => U,
+): StateMapper<U[], S, C> {
+  return memo<T[], U[], S, C>(
+    (_, context: StateMapperContext<C>) => context.resolve(prop),
+    (items) => items.map(mapFn),
+  );
 }

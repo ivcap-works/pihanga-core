@@ -582,6 +582,88 @@ describe("metacard event mapper — onXxxMapper forwarded from mapper-returned c
 });
 
 // ---------------------------------------------------------------------------
+// Inline card declarations in array props are auto-registered
+// ---------------------------------------------------------------------------
+
+describe("array prop containing inline card declarations is auto-registered", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+  const registerCardF: RegisterCardF = (name, params) =>
+    _registerCard(name, params, noopReducer);
+
+  /**
+   * Reproduces the pattern:
+   *   Box({ content: [Typography({ text: "BOOO" })] })
+   * returned directly from a meta card mapper.  Before the fix the
+   * Typography PiCardDef would be silently ignored (only a warning was
+   * emitted); after the fix it must be registered as
+   * `${metaName}/content/0`.
+   */
+  it("registers each inline card declaration in an array prop under name/prop/index", () => {
+    const boxType = `box-${uid()}`;
+    const textType = `text-${uid()}`;
+    const metaType = `meta-array-${uid()}`;
+    const metaName = `instance-array-${uid()}`;
+
+    addCardComponent({ name: boxType, component: () => null });
+    addCardComponent({ name: textType, component: () => null });
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      // mapper returns a Box whose `content` array contains a raw Typography declaration
+      mapper: () =>
+        ({
+          cardType: boxType,
+          content: [{ cardType: textType, text: "BOOO" }],
+        }) as any,
+    });
+
+    _registerCard(metaName, { cardType: metaType } as any, noopReducer);
+
+    // The Box card itself must be registered
+    expect(cardMappings[metaName]).toBeDefined();
+    expect(cardMappings[metaName].cardType).toBe(boxType);
+
+    // The inline Typography must be auto-registered as name/content/0
+    const childKey = `${metaName}/content/0`;
+    expect(cardMappings[childKey]).toBeDefined();
+    expect(cardMappings[childKey].cardType).toBe(textType);
+
+    // The `content` prop stored on the Box card must be the child name string, not the raw def
+    expect(cardMappings[metaName].props["content"]).toEqual([childKey]);
+  });
+
+  it("mixed arrays: card defs are registered, plain values are kept as-is", () => {
+    const containerType = `container-${uid()}`;
+    const itemType = `item-${uid()}`;
+    const name = `mixed-array-inst-${uid()}`;
+
+    addCardComponent({ name: containerType, component: () => null });
+    addCardComponent({ name: itemType, component: () => null });
+
+    _createCardMapping(
+      name,
+      {
+        cardType: containerType,
+        // mix of plain strings and an inline card declaration
+        items: ["string-a", { cardType: itemType, label: "x" }, "string-b"],
+      } as any,
+      noopReducer,
+      {},
+    );
+
+    const childKey = `${name}/items/1`;
+    expect(cardMappings[childKey]).toBeDefined();
+    expect(cardMappings[childKey].cardType).toBe(itemType);
+
+    const stored = cardMappings[name].props["items"] as unknown[];
+    expect(stored[0]).toBe("string-a");
+    expect(stored[1]).toBe(childKey); // replaced with the registered name
+    expect(stored[2]).toBe("string-b");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // B1 — null prop value must not crash _createCardMapping
 // ---------------------------------------------------------------------------
 

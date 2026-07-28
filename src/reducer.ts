@@ -27,6 +27,8 @@ type ReducerDef<S extends ReduxState, A extends ReduxAction> = {
   mapperOnce?: ReduceOnceF<S, A>;
   priority?: number;
   key?: string;
+  /** Always-set internal id used for cancellation and one-shot consumption. */
+  _internalId?: string;
   definedIn?: StackTrace.StackFrame;
   targetMapper?: ReduceF<S, A>;
 };
@@ -241,7 +243,7 @@ export function createReducer(
         const consumed = _reduce(ra, draft, action, delayedDispatcher, opts);
         if (consumed.length > 0) {
           mappings[action.type] = (mappings[action.type] || []).filter(
-            (m) => !m.key || !consumed.includes(m.key),
+            (m) => !m._internalId || !consumed.includes(m._internalId),
           );
         }
       }
@@ -249,7 +251,7 @@ export function createReducer(
         const consumed2 = _reduce(rany, draft, action, delayedDispatcher, opts);
         if (consumed2.length > 0) {
           mappings["*"] = (mappings["*"] || []).filter(
-            (m) => !m.key || !consumed2.includes(m.key),
+            (m) => !m._internalId || !consumed2.includes(m._internalId),
           );
         }
       }
@@ -288,40 +290,29 @@ export function createReducer(
     return addReducer(eventType, { mapperOnce: mapper, priority, key });
   };
 
-  const nonCancelF = () => {};
-
   function addReducer<S extends ReduxState, A extends ReduxAction>(
     eventType: string,
     reducerDef: ReducerDef<S, A>,
   ): PiReducerCancelF {
-    // B6: assign the fallback stack-trace key FIRST so that deduplication
-    // (removeReducer) and the cancel closure both use the final key value.
-    // Previously `key` was captured before this block ran, so auto-keyed
-    // registrations always returned nonCancelF and never deduped.
-    if (!reducerDef.key) {
-      const frames = StackTrace.getSync();
-      const sf = _get_source_frame(frames);
-      if (sf) {
-        reducerDef.key = sf.toString();
-      } else {
-        reducerDef.definedIn = sf;
-        console.log(">> cannot find source frame", eventType, frames);
-      }
-    }
-
-    const key = reducerDef.key;
     let m = mappings[eventType] || [];
-    m = removeReducer(key, m);
+    const key = reducerDef.key;
+    if (key) {
+      // replace a reducer with the same key
+      m = removeReducer(key, m);
+    }
+    // Always assign an internal id so cancel and one-shot consumption work
+    // even when no user-facing key was provided.
+    const internalId = uuidv7();
+    (reducerDef as ReducerDef<ReduxState, Action<any>>)._internalId = internalId;
     m.push(reducerDef as any as ReducerDef<ReduxState, Action<any>>); // keep typing happy
     m.sort((a, b) => (b.priority || 0) - (a.priority || 0));
     mappings[eventType] = m;
 
-    return key
-      ? () => {
-          const m = mappings[eventType] || [];
-          mappings[eventType] = removeReducer(key, m);
-        }
-      : nonCancelF;
+    return () => {
+      mappings[eventType] = (mappings[eventType] || []).filter(
+        (r) => r._internalId !== internalId,
+      );
+    };
   }
 
   const piReducer: PiReducer = {
@@ -387,8 +378,8 @@ function _reduce(
       } else if (m.mapperOnce) {
         draft.pihanga?.reducers?.push(m.definedIn || m.key || "unknown");
         const done = m.mapperOnce(draft, action, delayedDispatcher, opts);
-        if (done && m.key) {
-          consumed.push(m.key); // consumed → will be filtered out by caller
+        if (done && m._internalId) {
+          consumed.push(m._internalId); // consumed → will be filtered out by caller
         }
       }
     } catch (err: any) {
