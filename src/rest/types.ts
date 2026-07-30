@@ -64,6 +64,7 @@ export type RegisterGenericProps<
   context?: (action: A, state: S) => Promise<C> | null;
   guard?: (action: A, state: S, dispatcher: DispatchF, context: C) => boolean;
   headers?: (action: A, state: S, context: C) => { [key: string]: string };
+  replyMapper?: (raw: unknown, headers: { [k: string]: string }) => Promise<R>;
   reply: (
     state: S,
     reply: R,

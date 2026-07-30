@@ -11,6 +11,7 @@ import {
   ResultAction,
 } from "./types";
 import { RestContentType } from "./enums";
+import { jsonReplyMapper, textReplyMapper } from "./mappers";
 
 export function parseResponse(
   response: Response,
@@ -90,6 +91,7 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
     context,
     guard,
     headers,
+    replyMapper,
     reply,
     error,
   } = props;
@@ -169,12 +171,28 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
       bindings,
     });
     _fetch(url2, request)
-      .then((resp) => {
+      .then(async (resp) => {
         if (resp.statusCode < 300) {
+          const effectiveMapper =
+            replyMapper ??
+            (resp.mimeType.startsWith("text/") ? textReplyMapper : jsonReplyMapper);
+          let content: R;
+          try {
+            content = (await effectiveMapper(resp.content, resp.headers)) as R;
+          } catch (mapErr: unknown) {
+            const errResp: HttpResponse = {
+              ...resp,
+              statusCode: 0,
+              content: mapErr instanceof Error ? mapErr.message : String(mapErr),
+            };
+            dispatch(createErrorAction(errorType, errResp, name, url2, action));
+            return;
+          }
           const a: ResultAction<A> = {
             type: resultType,
             queryID: name,
             ...resp,
+            content,
             url: url2.toString(),
             request: action,
           };
