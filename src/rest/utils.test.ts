@@ -5,7 +5,7 @@
  * raw fetch responses into typed Redux actions, making them good candidates
  * for direct unit testing.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { vi } from "vitest";
 // rest/types.ts calls registerActions() at module level.
 // registerActions lives in redux.ts, which imports `register` from ".." (src/index.ts).
@@ -15,7 +15,7 @@ import { vi } from "vitest";
 // function bodies so this is safe for all tests in this file.
 vi.mock("../index", () => ({}));
 
-import { createErrorAction, parseResponse } from "./utils";
+import { createErrorAction, parseResponse, registerCommon } from "./utils";
 import { ErrorKind, HttpResponse } from "./types";
 import { RestContentType } from "./enums";
 
@@ -384,6 +384,210 @@ describe("createErrorAction – statusCode is preserved in the action", () => {
 // ---------------------------------------------------------------------------
 // parseResponse — additional edge cases
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// registerCommon — replyMapper integration
+// ---------------------------------------------------------------------------
+
+describe("registerCommon — replyMapper", () => {
+  /** Creates a minimal mock PiReducer + dispatch wiring for testing. */
+  function createMockSetup() {
+    const handlers: Record<string, (state: any, action: any, dispatch: any) => any> = {};
+    const dispatched: any[] = [];
+
+    const mockReducer = {
+      register: (type: string, handler: any) => {
+        handlers[type] = handler;
+      },
+    };
+
+    // Auto-forward dispatched actions to any registered handler.
+    const dispatch = (action: any) => {
+      dispatched.push(action);
+      const h = handlers[action.type];
+      if (h) h({}, action, dispatch);
+    };
+
+    return { handlers, dispatched, mockReducer, dispatch };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("invokes a custom replyMapper with parsed content and response headers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 42 }), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const { handlers, mockReducer, dispatch } = createMockSetup();
+    const replyMapper = vi.fn().mockResolvedValue({ mapped: true });
+    const reply = vi.fn();
+
+    registerCommon(
+      mockReducer as any,
+      {
+        name: "test",
+        origin: "http://localhost",
+        trigger: "TEST/TRIGGER",
+        url: "/api/test",
+        replyMapper,
+        reply,
+      },
+      () => [{ method: "GET" }, {}],
+      "test/submitted",
+      "test/result",
+      "test/error",
+      "test/int_error",
+    );
+
+    handlers["TEST/TRIGGER"]({}, { type: "TEST/TRIGGER" }, dispatch);
+    // Wait for all microtasks (fetch → parseResponse → mapper → dispatch)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(replyMapper).toHaveBeenCalledOnce();
+    expect(replyMapper).toHaveBeenCalledWith({ id: 42 }, expect.any(Object));
+    expect(reply).toHaveBeenCalledOnce();
+    expect(reply).toHaveBeenCalledWith(
+      expect.any(Object),
+      { mapped: true },
+      expect.any(Function),
+      expect.objectContaining({ content: { mapped: true } }),
+    );
+  });
+
+  it("uses jsonReplyMapper by default for JSON responses (pass-through)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ value: 7 }), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const { handlers, mockReducer, dispatch } = createMockSetup();
+    const reply = vi.fn();
+
+    registerCommon(
+      mockReducer as any,
+      {
+        name: "test",
+        origin: "http://localhost",
+        trigger: "TEST/TRIGGER",
+        url: "/api/test",
+        reply,
+      },
+      () => [{ method: "GET" }, {}],
+      "test/submitted",
+      "test/result",
+      "test/error",
+      "test/int_error",
+    );
+
+    handlers["TEST/TRIGGER"]({}, { type: "TEST/TRIGGER" }, dispatch);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(reply).toHaveBeenCalledOnce();
+    expect(reply).toHaveBeenCalledWith(
+      expect.any(Object),
+      { value: 7 },
+      expect.any(Function),
+      expect.any(Object),
+    );
+  });
+
+  it("uses textReplyMapper by default for text/* responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response("hello world", { headers: { "content-type": "text/plain" } }),
+        ),
+    );
+
+    const { handlers, mockReducer, dispatch } = createMockSetup();
+    const reply = vi.fn();
+
+    registerCommon(
+      mockReducer as any,
+      {
+        name: "test",
+        origin: "http://localhost",
+        trigger: "TEST/TRIGGER",
+        url: "/api/test",
+        reply,
+      },
+      () => [{ method: "GET" }, {}],
+      "test/submitted",
+      "test/result",
+      "test/error",
+      "test/int_error",
+    );
+
+    handlers["TEST/TRIGGER"]({}, { type: "TEST/TRIGGER" }, dispatch);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(reply).toHaveBeenCalledWith(
+      expect.any(Object),
+      "hello world",
+      expect.any(Function),
+      expect.any(Object),
+    );
+  });
+
+  it("dispatches an error action (statusCode: 0) and calls error handler when replyMapper rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 1 }), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const { handlers, dispatched, mockReducer, dispatch } = createMockSetup();
+    const replyMapper = vi.fn().mockRejectedValue(new Error("parse failed"));
+    const reply = vi.fn();
+    const error = vi.fn();
+
+    registerCommon(
+      mockReducer as any,
+      {
+        name: "test",
+        origin: "http://localhost",
+        trigger: "TEST/TRIGGER",
+        url: "/api/test",
+        replyMapper,
+        reply,
+        error,
+      },
+      () => [{ method: "GET" }, {}],
+      "test/submitted",
+      "test/result",
+      "test/error",
+      "test/int_error",
+    );
+
+    handlers["TEST/TRIGGER"]({}, { type: "TEST/TRIGGER" }, dispatch);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(reply).not.toHaveBeenCalled();
+
+    const errAction = dispatched.find((a) => a.type === "test/error");
+    expect(errAction).toBeDefined();
+    expect(errAction.statusCode).toBe(0);
+    expect(errAction.content).toBe("parse failed");
+
+    expect(error).toHaveBeenCalledOnce();
+  });
+});
 
 describe("parseResponse – additional content-type edge cases", () => {
   it("returns Blob for 'application/ld+json' (not in the recognised-JSON allowlist)", async () => {

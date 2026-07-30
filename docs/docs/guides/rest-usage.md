@@ -22,7 +22,8 @@ This document is split into two parts:
     * [PUT](#put)
     * [PATCH](#patch)
   * [Usage: DELETE](#usage-delete)
-  * [Usage: Error handling](#usage-error-handling)
+  * [Usage: replyMapper — custom response transformation](#usage-replymapper--custom-response-transformation)
+* [Usage: Error handling](#usage-error-handling)
 * [Debugging / internals](#debugging--internals)
   * [Where the code lives](#where-the-code-lives)
   * [How it hooks into Redux](#how-it-hooks-into-redux)
@@ -52,6 +53,7 @@ All verbs share the properties from `RegisterGenericProps` (`src/rest/types.ts`)
 | `context?` | `(action, state) => Promise<C> \| null` | Async context (e.g. auth token, base URL). |
 | `guard?` | `(action, state, dispatch, ctxt) => boolean` | Return `false` to skip the request. |
 | `headers?` | `(action, state, ctxt) => Record<string,string>` | Request headers (auth, correlation IDs, etc.). |
+| `replyMapper?` | `(raw: unknown, headers: Record<string,string>) => Promise<R>` | Transform the raw parsed response body into `R` before `reply` is called. Defaults to `jsonReplyMapper` (pass-through cast) unless the Content-Type is `text/*`, in which case `textReplyMapper` is used. |
 | `reply` | `(state, content, dispatch, resultAction) => void` | Called on success (HTTP < 300). Dispatch domain actions here. |
 | `error?` | `(state, errorAction, requestAction, dispatch) => S` | Called on non-2xx responses. Dispatch domain error actions here. |
 
@@ -384,6 +386,61 @@ register((r: PiRegister) => {
 })
 ```
 
+## Usage: replyMapper — custom response transformation
+
+`replyMapper` is an optional async hook that runs between the raw HTTP response body and your `reply` callback. It receives the already-parsed `content` (a JS object for JSON, a string for text, a `Blob` for binary) and the response headers, and must return a `Promise<R>`.
+
+### Default behaviour
+
+When `replyMapper` is **not** supplied, the framework automatically picks one of two built-in mappers based on the response `Content-Type`:
+
+| Content-Type | Default mapper | Effect |
+|---|---|---|
+| `text/*` | `textReplyMapper` | Calls `String(raw)` and resolves |
+| anything else | `jsonReplyMapper` | Resolves the already-parsed object as `R` (cast) |
+
+Both are exported from `@pihanga2/core`:
+
+```ts
+import { jsonReplyMapper, textReplyMapper } from "@pihanga2/core"
+```
+
+### Custom mapper — example: decode a Blob as UTF-8 text
+
+```ts
+import { register } from "@pihanga2/core"
+
+register((r) => {
+  r.GET<MyState, FetchCsvAction, string>({
+    name: "fetchCsv",
+    trigger: "CSV/FETCH",
+    url: "/api/export.csv",
+
+    replyMapper: async (raw, _headers) => {
+      if (raw instanceof Blob) return raw.text()
+      return String(raw)
+    },
+
+    reply: (_state, csv, dispatch) => {
+      dispatch({ type: "CSV/LOADED", csv })
+    },
+  })
+})
+```
+
+### Custom mapper — example: parse a non-standard envelope
+
+```ts
+replyMapper: async (raw, _headers) => {
+  const envelope = raw as { data: Item[]; meta: unknown }
+  return envelope.data
+},
+```
+
+### Error handling
+
+If the `replyMapper` promise **rejects**, the framework dispatches your registered `error` handler (same `ErrorAction` shape, `statusCode: 0`, `ErrorKind.Other`) so the failure is visible in Redux just like any HTTP error.
+
 ## Usage: Error handling
 
 On non-2xx responses, the REST module dispatches an `ErrorAction` containing:
@@ -440,6 +497,8 @@ Response parsing is in `src/rest/utils.ts`:
 * `application/json` → `response.json()` → `RestContentType.Object`
 * `application/jose` or `text/*` → `response.text()` → `RestContentType.Text`
 * otherwise → `response.blob()` → `RestContentType.Blob`
+
+After parsing, the result is passed through `replyMapper` (see [Usage: replyMapper](#usage-replymapper--custom-response-transformation)) before being stored in `ResultAction.content`. If no `replyMapper` is provided, `jsonReplyMapper` (JSON/blob) or `textReplyMapper` (text) is used automatically.
 
 ### Notes / gotchas
 

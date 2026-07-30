@@ -67,6 +67,36 @@ r.GET({
 !!! warning "Context errors"
     If `context` throws, the request is aborted and the `error` handler is called.
 
+## Reply mapping
+
+The optional `replyMapper` prop transforms the raw parsed response body into your typed `R` before `reply` is called. It is an `async` function so it can handle `Blob` responses that require awaiting:
+
+```ts
+r.GET<MyState, FetchCsvAction, string>({
+  name: "fetchCsv",
+  trigger: "CSV/FETCH",
+  url: "/api/export.csv",
+
+  replyMapper: async (raw, _headers) => {
+    if (raw instanceof Blob) return raw.text()
+    return String(raw)
+  },
+
+  reply: (_state, csv, dispatch) => {
+    dispatch({ type: "CSV/LOADED", csv })
+  },
+})
+```
+
+Two predefined mappers are exported from `@pihanga2/core`:
+
+| Export | Returns | Use when |
+|---|---|---|
+| `jsonReplyMapper` | `Promise<R>` (cast) | JSON / object responses (default for non-text content) |
+| `textReplyMapper` | `Promise<string>` | Plain-text responses (default for `text/*` content) |
+
+If `replyMapper` is omitted, the framework picks `textReplyMapper` for `text/*` content and `jsonReplyMapper` for everything else. If the mapper rejects, the `error` handler is called with `statusCode: 0`.
+
 ## Full documentation
 
 See [REST Usage Reference](rest-usage.md) for the complete API reference,

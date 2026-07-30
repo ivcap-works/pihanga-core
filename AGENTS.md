@@ -323,6 +323,7 @@ All REST handlers are registered inside `register()` callbacks and listen for Re
 | `origin?` | `string \| fn` | Base origin (default: `window.location.href`) |
 | `headers?` | `(action, state, ctx) => Record<string,string>` | Request headers |
 | `guard?` | `(action, state, dispatch, ctx) => boolean` | Return `false` to skip the request |
+| `replyMapper?` | `(raw: unknown, headers: Record<string,string>) => Promise<R>` | Transform the parsed response body into `R` before `reply` is called. Defaults to `jsonReplyMapper` for non-text content, `textReplyMapper` for `text/*`. If the promise rejects, the `error` handler is called with `statusCode: 0`. |
 | `reply` | `(state, content, dispatch, result) => void` | Called on 2xx success |
 | `error?` | `(state, errorAction, requestAction, dispatch) => S` | Called on non-2xx |
 
