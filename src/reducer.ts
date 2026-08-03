@@ -17,7 +17,6 @@ import { RegisterCardState, UPDATE_STATE_ACTION } from "./card";
 import StackTrace from "stacktrace-js";
 import { getLogger } from "./logger";
 import { Dispatch } from "react";
-import { currentRoute } from "./router";
 import { uuidv7 } from "./uuid";
 
 const logger = getLogger("reducer");
@@ -315,6 +314,26 @@ export function createReducer(
     };
   }
 
+  const onResolve = <S extends ReduxState, T>(
+    promise: Promise<T>,
+    callback: (state: S, result: T | null, err: unknown, dispatch: DispatchF) => void,
+  ): void => {
+    const actionType = `pi/promise/settle/${uuidv7()}`;
+
+    addReducer<S, any>(actionType, {
+      mapperOnce: (state, action, dispatch) => {
+        callback(state, action._result ?? null, action._err ?? null, dispatch);
+        return true;
+      },
+    });
+
+    promise.then(
+      (result) =>
+        delayedDispatcher({ type: actionType, _result: result, _err: null } as any),
+      (err) => delayedDispatcher({ type: actionType, _result: null, _err: err } as any),
+    );
+  };
+
   const piReducer: PiReducer = {
     register: registerReducer,
     registerOneShot,
@@ -325,6 +344,7 @@ export function createReducer(
       return id;
     },
     dispatchFromReducer: delayedDispatcher,
+    onResolve,
   };
 
   return [reducer, piReducer];

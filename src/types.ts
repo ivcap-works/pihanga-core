@@ -161,6 +161,32 @@ export interface PiReducer {
   registerOneShot: PiRegisterOneShotReducerF;
   dispatch: DispatchF;
   dispatchFromReducer: DispatchF;
+
+  /**
+   * Register a callback to be invoked — inside a live Immer reducer context —
+   * when `promise` settles (resolves **or** rejects).
+   *
+   * Because the callback runs inside `produce()`, you can mutate `state` safely.
+   * Exactly one of `result` / `err` will be non-null:
+   *   - On fulfillment: `result` is the resolved value, `err` is `null`.
+   *   - On rejection:  `result` is `null`, `err` is the rejection reason.
+   *
+   * @example
+   * ```ts
+   * // Inside an event handler that has access to `dispatch`:
+   * register.reducer.onResolve<AppState, User>(
+   *   fetchUser(id),
+   *   (state, result, err) => {
+   *     if (err) { state.error = String(err); return; }
+   *     state.user = result!;
+   *   },
+   * );
+   * ```
+   */
+  onResolve: <S extends ReduxState, T>(
+    promise: Promise<T>,
+    callback: (state: S, result: T | null, err: unknown, dispatch: DispatchF) => void,
+  ) => void;
 }
 
 /**
