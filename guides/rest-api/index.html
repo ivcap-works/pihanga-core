@@ -850,6 +850,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reply-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reply mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-documentation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1320,6 +1331,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reply-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reply mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-documentation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1427,6 +1449,46 @@
 <p class="admonition-title">Context errors</p>
 <p>If <code>context</code> throws, the request is aborted and the <code>error</code> handler is called.</p>
 </div>
+<h2 id="reply-mapping">Reply mapping<a class="headerlink" href="#reply-mapping" title="Permanent link">&para;</a></h2>
+<p>The optional <code>replyMapper</code> prop transforms the raw parsed response body into your typed <code>R</code> before <code>reply</code> is called. It is an <code>async</code> function so it can handle <code>Blob</code> responses that require awaiting:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">r</span><span class="p">.</span><span class="nx">GET</span><span class="o">&lt;</span><span class="nx">MyState</span><span class="p">,</span><span class="w"> </span><span class="nx">FetchCsvAction</span><span class="p">,</span><span class="w"> </span><span class="kt">string</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;fetchCsv&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">trigger</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;CSV/FETCH&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/export.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nx">replyMapper</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">raw</span><span class="p">,</span><span class="w"> </span><span class="nx">_headers</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">raw</span><span class="w"> </span><span class="ow">instanceof</span><span class="w"> </span><span class="nx">Blob</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">raw</span><span class="p">.</span><span class="nx">text</span><span class="p">()</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">String</span><span class="p">(</span><span class="nx">raw</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nx">reply</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_state</span><span class="p">,</span><span class="w"> </span><span class="nx">csv</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nx">dispatch</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;CSV/LOADED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">csv</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">})</span>
+</code></pre></div>
+<p>Two predefined mappers are exported from <code>@pihanga2/core</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Export</th>
+<th>Returns</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>jsonReplyMapper</code></td>
+<td><code>Promise&lt;R&gt;</code> (cast)</td>
+<td>JSON / object responses (default for non-text content)</td>
+</tr>
+<tr>
+<td><code>textReplyMapper</code></td>
+<td><code>Promise&lt;string&gt;</code></td>
+<td>Plain-text responses (default for <code>text/*</code> content)</td>
+</tr>
+</tbody>
+</table>
+<p>If <code>replyMapper</code> is omitted, the framework picks <code>textReplyMapper</code> for <code>text/*</code> content and <code>jsonReplyMapper</code> for everything else. If the mapper rejects, the <code>error</code> handler is called with <code>statusCode: 0</code>.</p>
 <h2 id="full-documentation">Full documentation<a class="headerlink" href="#full-documentation" title="Permanent link">&para;</a></h2>
 <p>See <a href="../rest-usage/">REST Usage Reference</a> for the complete API reference,
 including <code>body</code>, <code>contentType</code>, <code>query</code>, and error handling options.</p>

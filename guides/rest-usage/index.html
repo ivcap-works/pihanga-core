@@ -1056,6 +1056,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#usage-replymapper-custom-response-transformation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage: replyMapper — custom response transformation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage: replyMapper — custom response transformation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-mapper-example-decode-a-blob-as-utf-8-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom mapper — example: decode a Blob as UTF-8 text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-mapper-example-parse-a-non-standard-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom mapper — example: parse a non-standard envelope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#usage-error-handling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1748,6 +1809,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#usage-replymapper-custom-response-transformation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage: replyMapper — custom response transformation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage: replyMapper — custom response transformation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-mapper-example-decode-a-blob-as-utf-8-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom mapper — example: decode a Blob as UTF-8 text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-mapper-example-parse-a-non-standard-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom mapper — example: parse a non-standard envelope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#usage-error-handling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1877,6 +1999,7 @@
 </ul>
 </li>
 <li><a href="#usage-delete">Usage: DELETE</a></li>
+<li><a href="#usage-replymapper--custom-response-transformation">Usage: replyMapper — custom response transformation</a></li>
 <li><a href="#usage-error-handling">Usage: Error handling</a></li>
 <li><a href="#debugging--internals">Debugging / internals</a></li>
 <li><a href="#where-the-code-lives">Where the code lives</a></li>
@@ -1938,6 +2061,11 @@
 <td><code>headers?</code></td>
 <td><code>(action, state, ctxt) =&gt; Record&lt;string,string&gt;</code></td>
 <td>Request headers (auth, correlation IDs, etc.).</td>
+</tr>
+<tr>
+<td><code>replyMapper?</code></td>
+<td><code>(raw: unknown, headers: Record&lt;string,string&gt;) =&gt; Promise&lt;R&gt;</code></td>
+<td>Transform the raw parsed response body into <code>R</code> before <code>reply</code> is called. Defaults to <code>jsonReplyMapper</code> (pass-through cast) unless the Content-Type is <code>text/*</code>, in which case <code>textReplyMapper</code> is used.</td>
 </tr>
 <tr>
 <td><code>reply</code></td>
@@ -2237,6 +2365,62 @@
 <a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span><span class="p">})</span>
 <a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="p">})</span>
 </code></pre></div>
+<h2 id="usage-replymapper-custom-response-transformation">Usage: replyMapper — custom response transformation<a class="headerlink" href="#usage-replymapper-custom-response-transformation" title="Permanent link">&para;</a></h2>
+<p><code>replyMapper</code> is an optional async hook that runs between the raw HTTP response body and your <code>reply</code> callback. It receives the already-parsed <code>content</code> (a JS object for JSON, a string for text, a <code>Blob</code> for binary) and the response headers, and must return a <code>Promise&lt;R&gt;</code>.</p>
+<h3 id="default-behaviour">Default behaviour<a class="headerlink" href="#default-behaviour" title="Permanent link">&para;</a></h3>
+<p>When <code>replyMapper</code> is <strong>not</strong> supplied, the framework automatically picks one of two built-in mappers based on the response <code>Content-Type</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Content-Type</th>
+<th>Default mapper</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>text/*</code></td>
+<td><code>textReplyMapper</code></td>
+<td>Calls <code>String(raw)</code> and resolves</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td><code>jsonReplyMapper</code></td>
+<td>Resolves the already-parsed object as <code>R</code> (cast)</td>
+</tr>
+</tbody>
+</table>
+<p>Both are exported from <code>@pihanga2/core</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">jsonReplyMapper</span><span class="p">,</span><span class="w"> </span><span class="nx">textReplyMapper</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span>
+</code></pre></div>
+<h3 id="custom-mapper-example-decode-a-blob-as-utf-8-text">Custom mapper — example: decode a Blob as UTF-8 text<a class="headerlink" href="#custom-mapper-example-decode-a-blob-as-utf-8-text" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">register</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nx">register</span><span class="p">((</span><span class="nx">r</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nx">r</span><span class="p">.</span><span class="nx">GET</span><span class="o">&lt;</span><span class="nx">MyState</span><span class="p">,</span><span class="w"> </span><span class="nx">FetchCsvAction</span><span class="p">,</span><span class="w"> </span><span class="kt">string</span><span class="o">&gt;</span><span class="p">({</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;fetchCsv&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nx">trigger</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;CSV/FETCH&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/export.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span><span class="nx">replyMapper</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">raw</span><span class="p">,</span><span class="w"> </span><span class="nx">_headers</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">raw</span><span class="w"> </span><span class="ow">instanceof</span><span class="w"> </span><span class="nx">Blob</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">raw</span><span class="p">.</span><span class="nx">text</span><span class="p">()</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="nb">String</span><span class="p">(</span><span class="nx">raw</span><span class="p">)</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span><span class="nx">reply</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_state</span><span class="p">,</span><span class="w"> </span><span class="nx">csv</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">      </span><span class="nx">dispatch</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;CSV/LOADED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">csv</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="p">})</span>
+</code></pre></div>
+<h3 id="custom-mapper-example-parse-a-non-standard-envelope">Custom mapper — example: parse a non-standard envelope<a class="headerlink" href="#custom-mapper-example-parse-a-non-standard-envelope" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nx">replyMapper</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">raw</span><span class="p">,</span><span class="w"> </span><span class="nx">_headers</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">envelope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">raw</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">Item</span><span class="p">[];</span><span class="w"> </span><span class="nx">meta</span><span class="o">:</span><span class="w"> </span><span class="kt">unknown</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">envelope</span><span class="p">.</span><span class="nx">data</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">},</span>
+</code></pre></div>
+<h3 id="error-handling">Error handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h3>
+<p>If the <code>replyMapper</code> promise <strong>rejects</strong>, the framework dispatches your registered <code>error</code> handler (same <code>ErrorAction</code> shape, <code>statusCode: 0</code>, <code>ErrorKind.Other</code>) so the failure is visible in Redux just like any HTTP error.</p>
 <h2 id="usage-error-handling">Usage: Error handling<a class="headerlink" href="#usage-error-handling" title="Permanent link">&para;</a></h2>
 <p>On non-2xx responses, the REST module dispatches an <code>ErrorAction</code> containing:</p>
 <ul>
@@ -2286,6 +2470,7 @@
 <li><code>application/jose</code> or <code>text/*</code> → <code>response.text()</code> → <code>RestContentType.Text</code></li>
 <li>otherwise → <code>response.blob()</code> → <code>RestContentType.Blob</code></li>
 </ul>
+<p>After parsing, the result is passed through <code>replyMapper</code> (see <a href="#usage-replymapper--custom-response-transformation">Usage: replyMapper</a>) before being stored in <code>ResultAction.content</code>. If no <code>replyMapper</code> is provided, <code>jsonReplyMapper</code> (JSON/blob) or <code>textReplyMapper</code> (text) is used automatically.</p>
 <h3 id="notes-gotchas">Notes / gotchas<a class="headerlink" href="#notes-gotchas" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>reply(...)</code> runs in response to an internal action; keep it fast and dispatch domain actions.</li>
