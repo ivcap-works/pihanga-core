@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@pihanga2/core": "^0.3.20",
+    "@pihanga2/core": "file:..",
     "@pihanga2/shadcn": "^0.2.0",
     "@reduxjs/toolkit": "^2.12.0",
     "clsx": "^2.1.1",
