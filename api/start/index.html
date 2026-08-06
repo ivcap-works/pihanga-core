@@ -1030,6 +1030,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="props (optional)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#card-change-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card change tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#redux-serializable-check-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redux serializable-check tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rendering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rendering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1346,6 +1396,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="props (optional)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#card-change-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card change tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#redux-serializable-check-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redux serializable-check tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rendering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rendering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1396,50 +1496,210 @@ creates a second Redux store. Use <code>register()</code> for all card/REST regi
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nx">initialState</span><span class="o">:</span><span class="w"> </span><span class="kt">ReduxState</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nx">initFns?</span><span class="o">:</span><span class="w"> </span><span class="kt">Array</span><span class="o">&lt;</span><span class="p">(</span><span class="nx">r</span><span class="o">:</span><span class="w"> </span><span class="kt">PiRegister</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="ow">void</span><span class="o">&gt;</span><span class="p">,</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nx">props?</span><span class="o">:</span><span class="w"> </span><span class="kt">StartProps</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="p">;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nx">PiRegister</span><span class="p">;</span>
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <h3 id="initialstate"><code>initialState</code><a class="headerlink" href="#initialstate" title="Permanent link">&para;</a></h3>
-<p>The initial Redux state object. Must be a plain serialisable object.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">start</span><span class="p">({</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nx">app</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">title</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;My App&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">isLoading</span><span class="o">:</span><span class="w"> </span><span class="kt">false</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nx">user</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">null</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">});</span>
+<p>The initial Redux state object. Must be a plain serialisable object that extends <code>ReduxState</code>.
+Use <code>DEFAULT_REDUX_STATE</code> to seed the required framework slices:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">start</span><span class="p">,</span><span class="w"> </span><span class="nx">DEFAULT_REDUX_STATE</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nx">start</span><span class="p">({</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="p">...</span><span class="nx">DEFAULT_REDUX_STATE</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nx">count</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nx">user</span><span class="o">:</span><span class="w"> </span><span class="kt">null</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">});</span>
 </code></pre></div>
 <h3 id="initfns-optional"><code>initFns</code> (optional)<a class="headerlink" href="#initfns-optional" title="Permanent link">&para;</a></h3>
-<p>An array of registration callbacks. Each receives a <code>PiRegister</code> handle. These callbacks are
+<p>An array of registration callbacks. Each receives a <code>PiRegister</code> handle. Callbacks are
 flushed after the store is created, in order.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">start</span><span class="p">(</span><span class="nx">initialState</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="nx">myInit</span><span class="p">,</span><span class="w"> </span><span class="nx">anotherInit</span><span class="p">]);</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">start</span><span class="p">(</span><span class="nx">initialState</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="nx">cardLibInit</span><span class="p">,</span><span class="w"> </span><span class="nx">appInit</span><span class="p">]);</span>
 </code></pre></div>
 <h3 id="props-optional"><code>props</code> (optional)<a class="headerlink" href="#props-optional" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kr">type</span><span class="w"> </span><span class="nx">StartProps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="cm">/** Target DOM element (default: document.getElementById(&quot;root&quot;)) */</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">rootElement?</span><span class="o">:</span><span class="w"> </span><span class="kt">HTMLElement</span><span class="p">;</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="cm">/** Use HTML5 history API instead of hash routing (default: false) */</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nx">historyMode?</span><span class="o">:</span><span class="w"> </span><span class="kt">boolean</span><span class="p">;</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="cm">/** Suppress Redux serializable-check warnings for specific paths */</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nx">ignoredActionPaths?</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">[];</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nx">ignoredStatePaths?</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">[];</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">};</span>
+<p>Full reference for all <code>StartProps</code> options:</p>
+<h4 id="card-change-tracking">Card change tracking<a class="headerlink" href="#card-change-tracking" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cardTracking</code></td>
+<td><code>false \| 'names' \| 'props' \| 'diff'</code></td>
+<td><code>'names'</code></td>
+<td>How much detail to capture about cards whose props changed</td>
+</tr>
+<tr>
+<td><code>cardTrackingDebounceMs</code></td>
+<td><code>number</code></td>
+<td><code>1000</code></td>
+<td>Milliseconds to wait before dispatching <code>pi/card/update_state</code></td>
+</tr>
+</tbody>
+</table>
+<p>After a Redux cycle causes cards to re-render, Pihanga dispatches a <code>pi/card/update_state</code>
+action that writes the card change summary into <code>state.pihanga</code>.  Because React re-renders
+happen asynchronously after the reducer runs, this is always a <strong>separate</strong> action — card
+change info cannot be injected into the action that caused it.</p>
+<p><strong><code>cardTracking</code> levels:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th><code>pihanga.cards</code></th>
+<th><code>pihanga.cardDetails</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>false</code></td>
+<td>not written</td>
+<td>not written</td>
+</tr>
+<tr>
+<td><code>'names'</code> <em>(default)</em></td>
+<td><code>string[]</code> of changed card names</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>'props'</code></td>
+<td><code>string[]</code> of changed card names</td>
+<td><code>{ [cardName]: { [prop]: value, … } }</code></td>
+</tr>
+<tr>
+<td><code>'diff'</code></td>
+<td><code>string[]</code> of changed card names</td>
+<td><code>{ [cardName]: { props: {…}, changed: { [prop]: { from, to } } } }</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>'props'</code> and <code>'diff'</code> add a <code>produce()</code> pass on every card render — use only when
+you need the Redux DevTools detailed card view.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// minimal dev setup — see changed cards almost immediately</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nx">start</span><span class="p">(</span><span class="nx">initState</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="nx">appInit</span><span class="p">],</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">cardTracking</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;diff&#39;</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nx">cardTrackingDebounceMs</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">})</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1">// production default — batched, lightweight</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nx">start</span><span class="p">(</span><span class="nx">initState</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="nx">appInit</span><span class="p">])</span><span class="w">                        </span><span class="c1">// cardTracking: &#39;names&#39;, debounce: 1000ms</span>
 </code></pre></div>
+<h4 id="routing">Routing<a class="headerlink" href="#routing" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>routeQueryParam</code></td>
+<td><code>string</code></td>
+<td>—</td>
+<td>Serialise the route into a query parameter instead of the URL path (useful for GitHub Pages / static hosts)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="redux-serializable-check-tuning">Redux serializable-check tuning<a class="headerlink" href="#redux-serializable-check-tuning" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>disableSerializableStateCheck</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Disable RTK's state serializable check entirely</td>
+</tr>
+<tr>
+<td><code>disableSerializableActionCheck</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Disable RTK's action serializable check entirely</td>
+</tr>
+<tr>
+<td><code>ignoredActions</code></td>
+<td><code>string[]</code></td>
+<td><code>[]</code></td>
+<td>Action type strings exempt from the serializable check</td>
+</tr>
+<tr>
+<td><code>ignoredActionPaths</code></td>
+<td><code>string[]</code></td>
+<td><code>[]</code></td>
+<td>Dot-notation paths inside action payloads to ignore</td>
+</tr>
+<tr>
+<td><code>ignoredStatePaths</code></td>
+<td><code>string[]</code></td>
+<td><code>[]</code></td>
+<td>Dot-notation paths inside the Redux state to ignore</td>
+</tr>
+<tr>
+<td><code>isSerializable</code></td>
+<td><code>(v: unknown) =&gt; boolean</code></td>
+<td>RTK default</td>
+<td>Custom predicate for the serializable check</td>
+</tr>
+</tbody>
+</table>
+<h4 id="rendering">Rendering<a class="headerlink" href="#rendering" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rootComponent</code></td>
+<td><code>(store: Store) =&gt; JSX.Element</code></td>
+<td>—</td>
+<td>Override the root React component (replaces the default <code>&lt;Provider&gt;</code> wrapper)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<div class="highlight"><span class="filename">src/main.ts</span><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">start</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">coreInit</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./core.pihanga&quot;</span><span class="p">;</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">dashboardInit</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./dashboard/dashboard.pihanga&quot;</span><span class="p">;</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nx">start</span><span class="p">(</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="nx">app</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">title</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Dashboard&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">currentPage</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/&quot;</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nx">dashboard</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">items</span><span class="o">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="p">[</span><span class="nx">coreInit</span><span class="p">,</span><span class="w"> </span><span class="nx">dashboardInit</span><span class="p">],</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nx">historyMode</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="p">,</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nx">ignoredStatePaths</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;app.someNonSerializable&quot;</span><span class="p">],</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="p">);</span>
+<div class="highlight"><span class="filename">src/main.ts</span><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">start</span><span class="p">,</span><span class="w"> </span><span class="nx">DEFAULT_REDUX_STATE</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">;</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">init</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="nx">cardLibInit</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/shadcn&quot;</span><span class="p">;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">appInit</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./app.pihanga&quot;</span><span class="p">;</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">import</span><span class="w"> </span><span class="kr">type</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">AppState</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./app.types&quot;</span><span class="p">;</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nx">start</span><span class="o">&lt;</span><span class="nx">AppState</span><span class="o">&gt;</span><span class="p">(</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="p">{</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="p">...</span><span class="nx">DEFAULT_REDUX_STATE</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nx">activePage</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;app/home&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="nx">user</span><span class="o">:</span><span class="w"> </span><span class="kt">null</span><span class="p">,</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="p">[</span><span class="nx">cardLibInit</span><span class="p">,</span><span class="w"> </span><span class="nx">appInit</span><span class="p">],</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span><span class="p">{</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="c1">// Show changed card names + diffs in Redux DevTools, updated every second</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nx">cardTracking</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;diff&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="c1">// Exempt a non-serialisable action payload field</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span><span class="nx">ignoredActionPaths</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;payload.fileHandle&quot;</span><span class="p">],</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="c1">// Static-site deployment: encode routes as ?p=items/42</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span><span class="nx">routeQueryParam</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;p&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">);</span>
 </code></pre></div>
         <div id="llms-copy-button" style="position: fixed; z-index: 1100; top: 80px; right: 20px;">
             <button onclick="copyMarkdownToClipboard()" style="cursor: pointer; background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Copy Markdown</button>

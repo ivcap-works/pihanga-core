@@ -228,6 +228,122 @@ const [state, result, d] = await dispatchFetchDocument(dispatch, { url, catalogI
 
 ---
 
+## Async reducers and `withState`
+
+Redux reducers are normally **synchronous** — they receive a state draft, mutate it, and return.
+When you need `await` inside a reducer (e.g. to chain a fetch before updating state), the original
+Immer draft expires as soon as `produce()` returns.  Use `withState` to safely apply mutations
+to the current store state after an `await`.
+
+### How it works
+
+`withState<S>(fn)` accepts a callback that receives a **mutable Immer draft** and commits any
+mutations automatically:
+
+| Context | behaviour |
+|---|---|
+| Inside a synchronous reducer | `fn` receives the live Immer draft — mutations are committed when the reducer returns |
+| After `await` (outside a reduce cycle) | A fresh `createDraft(store.getState())` is created, `fn` is called, and `finishDraft` + dispatch happen automatically |
+
+### Via `PiRegister`
+
+```ts
+import { type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function init(register: PiRegister): void {
+  register.reducer.register<AppState>(
+    "ITEM/LOAD",
+    async (state, action) => {
+      // `state` is a live Immer draft here — safe to mutate synchronously
+      state.loading = true;
+
+      const data = await fetchItem(action.id); // ← original draft expires here
+
+      // After await: mutate state inside a scoped callback — committed automatically.
+      register.withState<AppState>((s) => {
+        s.items[action.id] = data;
+        s.loading = false;
+      });
+    },
+  );
+}
+```
+
+### Via the standalone export
+
+```ts
+import { withState } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+async function loadAndCommit() {
+  const data = await fetch("/api/items").then((r) => r.json());
+  withState<AppState>((s) => {
+    s.items = data;   // tracked mutation — committed to the store automatically
+  });
+}
+```
+
+---
+
+## Observing card changes via `pihanga.cards`
+
+Every Redux cycle, Pihanga tracks which card components re-rendered with changed props and writes
+a summary into `state.pihanga`.  This is surfaced as the `pi/card/update_state` action in Redux
+DevTools.
+
+!!! note "Timing"
+    React re-renders happen **after** the reducer for a user action has already run, so card change
+    information always appears on the *subsequent* `pi/card/update_state` action — never on the
+    action that caused the re-renders.  The default debounce window is 1 second, meaning up to
+    1 second of card changes are batched into a single report.
+
+### Configuration
+
+Control the level of detail and debounce window via `StartProps`:
+
+```ts
+start(initState, [appInit], {
+  cardTracking:          'diff', // 'names' | 'props' | 'diff' | false
+  cardTrackingDebounceMs: 0,     // 0 = fire as soon as React commits; default: 1000
+})
+```
+
+### Tracking levels
+
+| `cardTracking` | `pihanga.cards` | `pihanga.cardDetails` |
+|---|---|---|
+| `false` | not written | not written |
+| `'names'` *(default)* | `string[]` of changed card names | — |
+| `'props'` | `string[]` of changed card names | `{ [cardName]: { prop: value, … } }` |
+| `'diff'` | `string[]` of changed card names | `{ [cardName]: { props: {…}, changed: { prop: { from, to } } } }` |
+
+### Example DevTools state (level `'diff'`)
+
+```json
+{
+  "pihanga": {
+    "reducers": ["pi/router/navigate"],
+    "cards": ["app/sidebar", "app/content"],
+    "cardDetails": {
+      "app/sidebar": {
+        "props":   { "activePage": "items", "isOpen": true },
+        "changed": { "activePage": { "from": "home", "to": "items" } }
+      },
+      "app/content": {
+        "props":   { "items": ["a", "b", "c"] },
+        "changed": { "items": { "from": ["a", "b"], "to": ["a", "b", "c"] } }
+      }
+    }
+  }
+}
+```
+
+`pihanga.cards` mirrors `pihanga.reducers` in structure — both are cleared to `[]` at the start
+of every Redux cycle and populated on the cycle where they were active.
+
+---
+
 ## `dispatchPipe` — request/reply pattern
 
 `dispatchPipe` (available in `ReduceOpts`) wraps async Redux round-trips with automatic
