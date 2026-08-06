@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from "vitest";
 // object breaks the cycle without affecting the pure functions under test.
 vi.mock("./index", () => ({}));
 
-import { createShowPageAction, showPage } from "./router";
+import { createShowPageAction, showPage, _routeFunctions } from "./router";
 
 // The action type string is produced by registerActions("pi/router", ["show_page"])
 // so the expected value is deterministic.
@@ -124,5 +124,102 @@ describe("showPage", () => {
     const dispatch = vi.fn();
     showPage(dispatch, []);
     expect(dispatch.mock.calls[0][0].path).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _routeFunctions — query-param mode (routeQueryParam = "p")
+// ---------------------------------------------------------------------------
+
+describe("_routeFunctions — query-param mode", () => {
+  const { url2route, pathl2route } = _routeFunctions("", "p");
+
+  describe("url2route", () => {
+    it("parses /?p=foo/bar into path ['foo','bar']", () => {
+      const r = url2route("/?p=foo/bar");
+      expect(r.path).toEqual(["foo", "bar"]);
+    });
+
+    it("strips the route param from query", () => {
+      const r = url2route("/?p=foo/bar");
+      expect(r.query).not.toHaveProperty("p");
+    });
+
+    it("preserves other query params", () => {
+      const r = url2route("/?p=items/42&filter=active");
+      expect(r.path).toEqual(["items", "42"]);
+      expect(r.query).toEqual({ filter: "active" });
+    });
+
+    it("returns empty path for / (no p param)", () => {
+      const r = url2route("/");
+      expect(r.path).toEqual([]);
+    });
+
+    it("returns empty path for /?p= (empty value)", () => {
+      // Empty value is parsed as boolean true — treated as no path
+      const r = url2route("/?p=");
+      expect(r.path).toEqual([]);
+    });
+
+    it("produces a canonical url /?p=foo/bar", () => {
+      const r = url2route("/?p=foo/bar");
+      expect(r.url).toBe("/?p=foo/bar");
+    });
+
+    it("produces / for empty path", () => {
+      const r = url2route("/");
+      expect(r.url).toBe("/");
+    });
+  });
+
+  describe("pathl2route", () => {
+    it("serialises path as ?p= query param", () => {
+      const r = pathl2route(["items", "42"], {});
+      expect(r.url).toBe("/?p=items/42");
+    });
+
+    it("appends extra query params after the route param", () => {
+      const r = pathl2route(["search"], { q: "hello" });
+      expect(r.url).toBe("/?p=search&q=hello");
+    });
+
+    it("returns / for empty path with no query", () => {
+      const r = pathl2route([], {});
+      expect(r.url).toBe("/");
+    });
+
+    it("keeps path and query on the returned route", () => {
+      const r = pathl2route(["a", "b"], { x: "1" });
+      expect(r.path).toEqual(["a", "b"]);
+      expect(r.query).toEqual({ x: "1" });
+    });
+
+    it("round-trips: url2route(pathl2route(...).url) === original", () => {
+      const original = pathl2route(["users", "99"], { tab: "profile" });
+      const roundtripped = url2route(original.url);
+      expect(roundtripped.path).toEqual(["users", "99"]);
+      expect(roundtripped.query).toEqual({ tab: "profile" });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _routeFunctions — path mode (no routeQueryParam) — regression guard
+// ---------------------------------------------------------------------------
+
+describe("_routeFunctions — path mode", () => {
+  const { url2route, pathl2route } = _routeFunctions();
+
+  it("parses /items/42 into path ['items','42']", () => {
+    expect(url2route("/items/42").path).toEqual(["items", "42"]);
+  });
+
+  it("serialises ['items','42'] to /items/42", () => {
+    expect(pathl2route(["items", "42"], {}).url).toBe("/items/42");
+  });
+
+  it("includes query string in url", () => {
+    expect(pathl2route(["search"], { q: "hi" }).url).toBe("/search?q=hi");
   });
 });

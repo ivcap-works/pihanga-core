@@ -16,13 +16,6 @@ import { PiRegister } from ".";
 const logger = getLogger("router");
 export const browserHistory = createBrowserHistory();
 
-// type Route = {
-//   path: string[]
-//   query: PathQuery
-//   url: string
-//   fromBrowser?: boolean
-// }
-
 export const ACTION_TYPES = registerActions("pi/router", [
   "show_page",
   "navigate_to_page",
@@ -60,15 +53,18 @@ export const onNavigateToPage = createOnAction<NavigateToPageEvent>(
 export const ON_INIT_ACTION = "pi/start";
 export const onInit = createOnAction<{}>(ON_INIT_ACTION);
 
-export function currentRoute(pathPrefix = ""): Route {
-  // C3: removed unused `r2 = f.url2route(window.location.href)`
-  const f = route_functions(pathPrefix);
+export function currentRoute(pathPrefix = "", routeQueryParam?: string): Route {
+  const f = route_functions(pathPrefix, routeQueryParam);
   return f.location2route(browserHistory.location);
 }
 
-export function init(reducer: PiReducer, pathPrefix = ""): Route {
+export function init(
+  reducer: PiReducer,
+  pathPrefix = "",
+  routeQueryParam?: string,
+): Route {
   let workingURL: string;
-  const f = route_functions(pathPrefix);
+  const f = route_functions(pathPrefix, routeQueryParam);
 
   browserHistory.listen(({ action, location }: Update) => {
     // location is an object like window.location
@@ -91,8 +87,6 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
     });
   }
 
-  // C5: removed `return state` — ReduceF contract is "mutate the Immer draft,
-  // do not return"; the router reducers were violating their own documented rule.
   reducer.register<ReduxState, ReduxAction & NavigateToPageEvent>(
     ACTION_TYPES.NAVIGATE_TO_PAGE,
     (state, { url, fromBrowser }, dispatch) => {
@@ -125,7 +119,6 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
         ...route,
         fromBrowser,
       };
-      // C5: no return — Immer captures the draft mutation automatically
     },
     DEF_REDUCER_PRIORITY,
     "@builtin:router:SHOW_PAGE",
@@ -137,7 +130,6 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
       const url = browserPath().url;
       logger.info(`Request navigation to '${url}'`);
       setTimeout(() => navigateToPage(url, true));
-      // C5: no return needed (no state mutation)
     },
     DEF_REDUCER_PRIORITY,
     "@builtin:router:@@INIT",
@@ -145,7 +137,46 @@ export function init(reducer: PiReducer, pathPrefix = ""): Route {
   return f.location2route(browserHistory.location);
 }
 
-function route_functions(pathPrefix = "") {
+/**
+ * Builds a canonical URL for query-param routing mode.
+ *
+ * When `path` is non-empty the path segments are serialised as the value of
+ * the `routeQueryParam` query parameter (e.g. `/?p=foo/bar`).  Any additional
+ * `query` entries are appended as ordinary query parameters.
+ * When `path` is empty the result is `/` (plus any extra query params).
+ *
+ * This keeps the server always serving the root path (`/`) while the logical
+ * route is fully described in the query string — ideal for static hosts such
+ * as GitHub Pages that cannot serve arbitrary sub-paths.
+ */
+function buildQueryUrl(
+  path: string[],
+  query: PathQuery,
+  routeQueryParam: string,
+): string {
+  const params: string[] = [];
+  if (path.length > 0) {
+    params.push(`${encodeURI(routeQueryParam)}=${encodeURI(path.join("/"))}`);
+  }
+  for (const [k, v] of Object.entries(query)) {
+    const n = encodeURI(k);
+    if (typeof v === "boolean") {
+      params.push(n);
+    } else if (typeof v === "number") {
+      params.push(`${n}=${v}`);
+    } else {
+      params.push(`${n}=${encodeURI(v)}`);
+    }
+  }
+  return params.length > 0 ? `/?${params.join("&")}` : "/";
+}
+
+/** @internal Exported for unit testing only. */
+export function _routeFunctions(pathPrefix = "", routeQueryParam?: string) {
+  return route_functions(pathPrefix, routeQueryParam);
+}
+
+function route_functions(pathPrefix = "", routeQueryParam?: string) {
   const location2route = (location: Location): Route => {
     const [p, s] = [location.pathname, location.search];
     const url = s ? `${p}${s}` : p;
@@ -154,23 +185,43 @@ function route_functions(pathPrefix = "") {
 
   const url2route = (url: string): Route => {
     const [pn, search] = url.split("?");
+    const rawQuery = {} as PathQuery;
+    if (search && search.length > 0) {
+      search.split("&").forEach((el) => {
+        const [k, v] = el.split("=");
+        rawQuery[decodeURI(k)] = v ? decodeURI(v) : true;
+      });
+    }
 
+    if (routeQueryParam) {
+      // Query-param mode: logical path is stored in e.g. ?p=foo/bar
+      const rawPath = rawQuery[routeQueryParam];
+      // Remove the route param from the remaining query object
+      const query = { ...rawQuery };
+      delete query[routeQueryParam];
+      const path =
+        typeof rawPath === "string" && rawPath.length > 0
+          ? rawPath.split("/").filter((s) => s !== "")
+          : [];
+      const canonicalUrl = buildQueryUrl(path, query, routeQueryParam);
+      return { url: canonicalUrl, path, query };
+    }
+
+    // Default path mode
     const path = pn
       .substring(pathPrefix.length)
       .split("/")
       .filter((s) => s !== "");
-    const query = {} as PathQuery;
-    const s = search;
-    if (s && s.length > 0) {
-      s.split("&").forEach((el) => {
-        const [k, v] = el.split("=");
-        query[decodeURI(k)] = v ? decodeURI(v) : true;
-      });
-    }
-    return { url, path, query };
+    return { url, path, query: rawQuery };
   };
 
   const pathl2route = (path: string[], query: PathQuery): Route => {
+    if (routeQueryParam) {
+      const url = buildQueryUrl(path, query, routeQueryParam);
+      return { url, path, query };
+    }
+
+    // Default path mode
     let url = `${pathPrefix}/${path.join("/")}`;
     if (query) {
       const qa = Object.entries(query);
@@ -192,5 +243,6 @@ function route_functions(pathPrefix = "") {
     }
     return { url, path, query };
   };
+
   return { location2route, url2route, pathl2route };
 }

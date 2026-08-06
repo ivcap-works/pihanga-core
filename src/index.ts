@@ -353,6 +353,28 @@ export type StartProps = {
    * etc. (Prefer normalizing to plain data where possible.)
    */
   isSerializable?: (value: unknown) => boolean;
+
+  /**
+   * When set, the router operates in **query-parameter mode**: the logical
+   * route path is serialised into this query parameter instead of the URL
+   * pathname.
+   *
+   * For example, with `routeQueryParam: "p"`:
+   * - `showPage(dispatch, ["items", "42"])` pushes `/?p=items/42` to the
+   *   browser history instead of `/items/42`.
+   * - Navigating to `https://example.com/?p=items/42` is equivalent to
+   *   navigating to `https://example.com/items/42` in path mode.
+   *
+   * This is the recommended setting for static deployment environments (e.g.
+   * GitHub Pages) that only serve the root path and cannot handle arbitrary
+   * sub-path requests on the server side.
+   *
+   * @example
+   * ```ts
+   * start(initState, [appInit], { routeQueryParam: "p" })
+   * ```
+   */
+  routeQueryParam?: string;
 };
 
 export function start<S extends Partial<ReduxState>>(
@@ -363,7 +385,7 @@ export function start<S extends Partial<ReduxState>>(
   const state = {
     ...DEFAULT_REDUX_STATE,
     ...initialState,
-    ...{ route: currentRoute() }, // override route with current one
+    ...{ route: currentRoute("", props.routeQueryParam) }, // override route with current one
   };
   let dispatchF: Dispatch<any> | null = null;
   const dispatcherW: Dispatch<any> = (a: any): void => {
@@ -374,7 +396,7 @@ export function start<S extends Partial<ReduxState>>(
     }
   };
   const [reducer, piReducer] = createReducer(state, dispatcherW);
-  const route = routerInit(piReducer);
+  const route = routerInit(piReducer, "", props.routeQueryParam);
 
   const ignoredActions = ([] as string[]).concat(props.ignoredActions || []);
   const ignoredActionPaths = [
