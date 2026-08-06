@@ -186,7 +186,7 @@ export interface PiReducer {
   onResolve: <S extends ReduxState, T>(
     promise: Promise<T>,
     callback: (state: S, result: T | null, err: unknown, dispatch: DispatchF) => void,
-  ) => void;
+  ) => Promise<T>;
 }
 
 /**
@@ -258,7 +258,10 @@ export type PiCardProps<P, E = {}> = P & {
 
 export type CSSModuleClasses = { readonly [key: string]: string };
 
-export type PiCardRef = string | PiCardDef;
+/** The name (registry key) of a registered card. */
+export type PiCardName = string;
+
+export type PiCardRef = PiCardName | PiCardDef;
 
 export type RefF = any;
 export type StateMapper<T, S extends ReduxState, C = PiDefCtxtProps> = (
@@ -333,7 +336,7 @@ export type PiRegisterMetaCard = {
   events?: { [key: string]: string };
 };
 
-export type RegisterCardF = (name: string, parameters: PiCardDef) => string;
+export type RegisterCardF = (name: string, parameters: PiCardDef) => PiCardName;
 export type MetaCardMapperF = (
   name: string,
   props: any,

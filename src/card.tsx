@@ -568,6 +568,10 @@ function createCardState(): CardState {
   // A9: off by default; opt-in via StartProps.debugCardState
   let enabled = false;
 
+  // Always-on: lightweight list of card names whose props changed, reported via
+  // pihanga.cards on the next UPDATE_STATE_ACTION cycle (mirrors pihanga.reducers).
+  const pendingChangedNames = new Set<string>();
+
   const setEnabled = (flag: boolean) => {
     enabled = flag;
   };
@@ -592,12 +596,9 @@ function createCardState(): CardState {
       clearTimeout(timer);
     }
     timer = window.setTimeout(() => {
-      if (dispatch) {
-        const changed = Object.values(s).filter((s) => s.changedAt > lastReport);
-        if (changed.length > 0) {
-          clearTimeout(timer); // just in case
-          dispatch({ type: UPDATE_STATE_ACTION });
-        }
+      if (dispatch && pendingChangedNames.size > 0) {
+        clearTimeout(timer); // just in case
+        dispatch({ type: UPDATE_STATE_ACTION });
       }
     }, 1000);
   };
@@ -606,30 +607,34 @@ function createCardState(): CardState {
     cardProps: CompProps,
     _dispatch: (a: AnyAction) => any,
   ) => {
-    if (!enabled) return; // A9: no-op when debug is off
+    dispatch = _dispatch; // always capture the dispatcher so resetTimer can fire
+    if (!enabled) return; // A9: detailed props tracking is opt-in
     const e = getS(cardName, cardProps);
     e.cardProps = cardProps;
-    dispatch = _dispatch;
   };
   const changed = (cardName: string, isUnchanged: boolean, _props: CompProps) => {
-    if (!enabled) {
-      // A9: still log the debug line when not suppressed by the flag; omit
-      // the state-tracking overhead (getS, timer reset) entirely.
-      if (!isUnchanged) {
-        logger.debug("card has changed:", cardName);
-      }
-      return;
+    if (!isUnchanged) {
+      logger.debug("card has changed:", cardName);
+      // Always track the card name; reducer will emit it as pihanga.cards.
+      pendingChangedNames.add(cardName);
+      resetTimer();
     }
+    if (!enabled) return; // A9: detailed props tracking is opt-in
     const e = getS(cardName, _props);
     e.reportedAt = Date.now();
     if (!isUnchanged) {
-      logger.debug("card has changed:", cardName);
       e.changedAt = Date.now();
-      resetTimer();
     }
   };
   const reducer = (state: ReduxState) => {
-    if (!enabled) return; // A9: no-op when debug is off
+    // Always: report changed card names as pihanga.cards (mirrors pihanga.reducers).
+    (state.pihanga ??= {}).cards = [...pendingChangedNames];
+    pendingChangedNames.clear();
+    if (!enabled) {
+      lastReport = Date.now();
+      return;
+    }
+    // A9: detailed props tracking — populate pihanga.cardProps when debugCardState is on.
     const pi = Object.values(s)
       .filter((s) => s.reportedAt > lastReport)
       .reduce(
@@ -648,7 +653,7 @@ function createCardState(): CardState {
         },
         {} as { [k: string]: any },
       );
-    (state.pihanga ??= {}).cards = pi;
+    (state.pihanga ??= {}).cardProps = pi;
     lastReport = Date.now();
   };
   return { props, changed, reducer, setEnabled };

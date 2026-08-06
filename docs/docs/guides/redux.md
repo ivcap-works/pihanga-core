@@ -228,6 +228,64 @@ const [state, result, d] = await dispatchFetchDocument(dispatch, { url, catalogI
 
 ---
 
+## Async reducers and `withState`
+
+Redux reducers are normally **synchronous** — they receive a state draft, mutate it, and return.
+When you need `await` inside a reducer (e.g. to chain a fetch before updating state), the original
+Immer draft expires as soon as `produce()` returns.  Use `withState` to safely apply mutations
+to the current store state after an `await`.
+
+### How it works
+
+`withState<S>(fn)` accepts a callback that receives a **mutable Immer draft** and commits any
+mutations automatically:
+
+| Context | behaviour |
+|---|---|
+| Inside a synchronous reducer | `fn` receives the live Immer draft — mutations are committed when the reducer returns |
+| After `await` (outside a reduce cycle) | A fresh `createDraft(store.getState())` is created, `fn` is called, and `finishDraft` + dispatch happen automatically |
+
+### Via `PiRegister`
+
+```ts
+import { type PiRegister } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+export function init(register: PiRegister): void {
+  register.reducer.register<AppState>(
+    "ITEM/LOAD",
+    async (state, action) => {
+      // `state` is a live Immer draft here — safe to mutate synchronously
+      state.loading = true;
+
+      const data = await fetchItem(action.id); // ← original draft expires here
+
+      // After await: mutate state inside a scoped callback — committed automatically.
+      register.withState<AppState>((s) => {
+        s.items[action.id] = data;
+        s.loading = false;
+      });
+    },
+  );
+}
+```
+
+### Via the standalone export
+
+```ts
+import { withState } from "@pihanga2/core";
+import type { AppState } from "./app.types";
+
+async function loadAndCommit() {
+  const data = await fetch("/api/items").then((r) => r.json());
+  withState<AppState>((s) => {
+    s.items = data;   // tracked mutation — committed to the store automatically
+  });
+}
+```
+
+---
+
 ## `dispatchPipe` — request/reply pattern
 
 `dispatchPipe` (available in `ReduceOpts`) wraps async Redux round-trips with automatic

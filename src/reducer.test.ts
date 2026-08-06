@@ -6,8 +6,9 @@
  * tests fast and free of React/DOM setup.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { createReducer } from "./reducer";
+import { createReducer, getActiveDraft } from "./reducer";
 import { ReduxAction, ReduxState } from "./types";
+import { isDraft, createDraft, finishDraft } from "immer";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -570,5 +571,111 @@ describe("B7 — registerOneShot: key parameter and cancel return value", () => 
     // B7 fix: key is now accepted — handler1 was replaced before it could fire.
     expect(handler1).not.toHaveBeenCalled();
     expect(handler2).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getActiveDraft — active-draft tracking for async reducer support
+// ---------------------------------------------------------------------------
+
+describe("getActiveDraft", () => {
+  it("returns null before any reduce cycle has started", () => {
+    // Module-level state is shared; just ensure it's null between reduces.
+    expect(getActiveDraft()).toBeNull();
+  });
+
+  it("returns an Immer draft (isDraft === true) while inside a reduce cycle", () => {
+    const { reducer, piReducer } = setup();
+    let draftIsDraft = false;
+
+    piReducer.register(
+      "CAPTURE_DRAFT",
+      (state) => {
+        const d = getActiveDraft();
+        draftIsDraft = isDraft(d);
+        state.pihanga!.value = "mutated";
+      },
+      0,
+      "capture-draft-key",
+    );
+
+    dispatch(reducer, { type: "CAPTURE_DRAFT" });
+    expect(draftIsDraft).toBe(true);
+  });
+
+  it("draft seen during reduction reflects mutations made so far", () => {
+    const { reducer, piReducer } = setup();
+    let valueSeenViaGetActiveDraft: any;
+
+    piReducer.register<ReduxState, ReduxAction & { v: string }>(
+      "DRAFT_MUTATION",
+      (state, action) => {
+        state.pihanga!.value = action.v;
+        // getActiveDraft() must expose the same mutable draft
+        valueSeenViaGetActiveDraft = getActiveDraft()?.pihanga?.value;
+      },
+      0,
+      "draft-mutation-key",
+    );
+
+    dispatch(reducer, { type: "DRAFT_MUTATION", v: "hello" });
+    expect(valueSeenViaGetActiveDraft).toBe("hello");
+  });
+
+  it("returns null after the reduce cycle has finished", () => {
+    const { reducer, piReducer } = setup();
+
+    piReducer.register("NOOP_ACTION", () => {}, 0, "noop-key");
+    dispatch(reducer, { type: "NOOP_ACTION" });
+
+    // After produce() returns the draft is finalized — getActiveDraft() must
+    // be back to null.
+    expect(getActiveDraft()).toBeNull();
+  });
+
+  it("returns null even when an exception is thrown inside a reducer", () => {
+    const { reducer, piReducer } = setup();
+
+    piReducer.register(
+      "THROW_ACTION",
+      () => {
+        throw new Error("boom");
+      },
+      0,
+      "throw-key",
+    );
+
+    // The reducer swallows handler errors (logged); _activeDraft must still
+    // be cleared in the finally block.
+    dispatch(reducer, { type: "THROW_ACTION" });
+    expect(getActiveDraft()).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Outside-cycle Immer draft pattern (mirrors getState() outside a reduce cycle)
+// ---------------------------------------------------------------------------
+
+describe("outside-cycle createDraft — immutability contract", () => {
+  it("createDraft produces an Immer draft (isDraft === true)", () => {
+    const draft = createDraft(BASE_STATE);
+    expect(isDraft(draft)).toBe(true);
+    finishDraft(draft); // clean up
+  });
+
+  it("mutations on the draft do NOT affect the original state", () => {
+    const draft = createDraft(BASE_STATE) as any;
+    draft.pihanga!.extra = "injected";
+    // Original is unchanged
+    expect((BASE_STATE.pihanga as any).extra).toBeUndefined();
+    finishDraft(draft);
+  });
+
+  it("finishDraft returns a new plain immutable state with the mutations applied", () => {
+    const draft = createDraft(BASE_STATE) as any;
+    draft.pihanga!.extra = "injected";
+    const next = finishDraft(draft) as ReduxState & { pihanga: { extra: string } };
+    expect(next.pihanga.extra).toBe("injected");
+    expect(isDraft(next)).toBe(false); // finished — plain object
   });
 });

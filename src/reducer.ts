@@ -21,6 +21,17 @@ import { uuidv7 } from "./uuid";
 
 const logger = getLogger("reducer");
 
+/** The Immer draft currently being mutated inside a `produce` call, or `null` when idle. */
+let _activeDraft: ReduxState | null = null;
+
+/**
+ * Returns the Immer draft that is active for the current Redux reduce cycle,
+ * or `null` when called outside of one.
+ */
+export function getActiveDraft(): ReduxState | null {
+  return _activeDraft;
+}
+
 type ReducerDef<S extends ReduxState, A extends ReduxAction> = {
   mapperMulti?: ReduceF<S, A>;
   mapperOnce?: ReduceOnceF<S, A>;
@@ -43,11 +54,19 @@ export function createReducer(
   initialState: ReduxState,
   dispatcher: Dispatch<any>,
 ): [Reducer<ReduxState, Action>, PiReducer] {
+  const WITH_STATE_COMMIT = "pi/withState/commit";
+
   const mappings: { [k: string]: ReducerDef<ReduxState, Action>[] } = {};
   mappings[UPDATE_STATE_ACTION] = [
     {
       mapperMulti: RegisterCardState.reducer,
       key: "@builtin:card:UPDATE_STATE_ACTION",
+    },
+  ];
+  mappings[WITH_STATE_COMMIT] = [
+    {
+      mapperMulti: (_draft, action: any) => action.next,
+      key: "@builtin:withState:commit",
     },
   ];
 
@@ -214,11 +233,15 @@ export function createReducer(
     const ra = mappings[action.type];
     const rany = mappings["*"];
     if ((!ra || ra.length === 0) && (!rany || rany.length === 0)) {
-      const ra = s.pihanga?.reducers;
-      if (ra && ra.length > 0) {
+      const staleReducers =
+        Array.isArray(s.pihanga?.reducers) && (s.pihanga.reducers as any[]).length > 0;
+      const staleCards =
+        Array.isArray(s.pihanga?.cards) && (s.pihanga.cards as string[]).length > 0;
+      if (staleReducers || staleCards) {
         return produce<ReduxState, ReduxState>(s, (draft) => {
           if (draft.pihanga) {
             draft.pihanga.reducers = [];
+            draft.pihanga.cards = [];
           }
         });
       }
@@ -226,33 +249,39 @@ export function createReducer(
     }
 
     const nextState = produce<ReduxState, ReduxState>(s, (draft) => {
-      const opts: ReduceOpts<ReduxState> = {
-        rawState: s,
-        dispatchPipe: dispatchPipe,
-      };
-      if (!draft.pihanga) {
-        draft.pihanga = {};
-      }
-      draft.pihanga.reducers = [];
-      if (ra) {
-        // B5: _reduce returns only the keys of consumed one-shots; we remove
-        // them from the LIVE mapping so any reducers added during the loop
-        // (e.g. by dispatchPipe or by a handler that calls piReducer.register)
-        // are not clobbered by a wholesale array replacement.
-        const consumed = _reduce(ra, draft, action, delayedDispatcher, opts);
-        if (consumed.length > 0) {
-          mappings[action.type] = (mappings[action.type] || []).filter(
-            (m) => !m._internalId || !consumed.includes(m._internalId),
-          );
+      _activeDraft = draft;
+      try {
+        const opts: ReduceOpts<ReduxState> = {
+          rawState: s,
+          dispatchPipe: dispatchPipe,
+        };
+        if (!draft.pihanga) {
+          draft.pihanga = {};
         }
-      }
-      if (rany) {
-        const consumed2 = _reduce(rany, draft, action, delayedDispatcher, opts);
-        if (consumed2.length > 0) {
-          mappings["*"] = (mappings["*"] || []).filter(
-            (m) => !m._internalId || !consumed2.includes(m._internalId),
-          );
+        draft.pihanga.reducers = [];
+        draft.pihanga.cards = [];
+        if (ra) {
+          // B5: _reduce returns only the keys of consumed one-shots; we remove
+          // them from the LIVE mapping so any reducers added during the loop
+          // (e.g. by dispatchPipe or by a handler that calls piReducer.register)
+          // are not clobbered by a wholesale array replacement.
+          const consumed = _reduce(ra, draft, action, delayedDispatcher, opts);
+          if (consumed.length > 0) {
+            mappings[action.type] = (mappings[action.type] || []).filter(
+              (m) => !m._internalId || !consumed.includes(m._internalId),
+            );
+          }
         }
+        if (rany) {
+          const consumed2 = _reduce(rany, draft, action, delayedDispatcher, opts);
+          if (consumed2.length > 0) {
+            mappings["*"] = (mappings["*"] || []).filter(
+              (m) => !m._internalId || !consumed2.includes(m._internalId),
+            );
+          }
+        }
+      } finally {
+        _activeDraft = null;
       }
       return;
     });
@@ -317,7 +346,7 @@ export function createReducer(
   const onResolve = <S extends ReduxState, T>(
     promise: Promise<T>,
     callback: (state: S, result: T | null, err: unknown, dispatch: DispatchF) => void,
-  ): void => {
+  ): Promise<T> => {
     const actionType = `pi/promise/settle/${uuidv7()}`;
 
     addReducer<S, any>(actionType, {
@@ -332,6 +361,7 @@ export function createReducer(
         delayedDispatcher({ type: actionType, _result: result, _err: null } as any),
       (err) => delayedDispatcher({ type: actionType, _result: null, _err: err } as any),
     );
+    return promise;
   };
 
   const piReducer: PiReducer = {

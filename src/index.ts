@@ -3,7 +3,7 @@ import { Dispatch } from "react";
 
 import {
   PiCardDef,
-  PiCardRef,
+  PiCardName,
   PiRegisterComponent,
   ReduxAction,
   ReduxState,
@@ -19,7 +19,8 @@ import {
   registerMetacard,
   updateOrRegisterCard,
 } from "./register_cards";
-import { createReducer } from "./reducer";
+import { createReducer, getActiveDraft } from "./reducer";
+import { createDraft, finishDraft } from "immer";
 import { ON_INIT_ACTION, currentRoute, init as routerInit } from "./router";
 
 import { configureStore, isPlain, Store } from "@reduxjs/toolkit";
@@ -75,7 +76,7 @@ export {
   isCardRef,
 } from "./register_cards";
 export { getLogger } from "./logger";
-export type { PiCardProps, PiCardRef } from "./types";
+export type { PiCardProps, PiCardName, PiCardRef } from "./types";
 export type { ErrorAction as RestErrorAction } from "./rest";
 export { RestContentType } from "./rest";
 export * from "./rest";
@@ -96,7 +97,7 @@ export interface PiRegister {
 
   window<S extends ReduxState>(parameters: PiMapProps<WindowProps, S, {}>): string;
 
-  card(name: string, parameters: PiCardDef): string;
+  card(name: string, parameters: PiCardDef): PiCardName;
   updateCard(name: string, parameters: { [key: string]: GenericCardParameterT }): string;
 
   cardComponent(declaration: PiRegisterComponent): void;
@@ -130,6 +131,28 @@ export interface PiRegister {
   //registerPeriodicGET<S extends ReduxState, A extends ReduxAction, R>(props: PiRegisterPeridicGetProps<S, A, R>): void;
 
   reducer: PiReducer;
+
+  /**
+   * Run `fn` with the current Redux state as a **mutable Immer draft**,
+   * then automatically commit the mutations back to the store.
+   *
+   * - **Inside a reduce cycle**: `fn` receives the live draft — mutations
+   *   are committed when the reducer returns (no extra dispatch needed).
+   * - **Outside a reduce cycle** (e.g. after `await`): a fresh
+   *   `createDraft(store.getState())` is created, `fn` is called,
+   *   `finishDraft` is called, and the result is dispatched as
+   *   `pi/withState/commit`.
+   *
+   * ```ts
+   * async onFoo(s: AppState, action, dispatch) {
+   *   const x = await fetchSomething();   // original draft expired
+   *   r.withState<AppState>((s) => {
+   *     s.items[action.id] = x;           // safe mutation
+   *   });
+   * }
+   * ```
+   */
+  withState<S extends ReduxState>(fn: (s: S) => void): void;
 }
 
 /** Callback passed to {@link register} — receives the fully initialised {@link PiRegister} instance. */
@@ -138,6 +161,9 @@ export type RegisterCbk = (register: PiRegister) => void;
 // These remain private and shared across all imports
 let registerF: PiRegister | null = null;
 let pendingRegistrations: RegisterCbk[] = [];
+
+/** Module-level store reference set by start(). */
+let _store: { getState: () => unknown } | null = null;
 
 function setRegisterF<T>(f: PiRegister): void {
   registerF = f;
@@ -218,6 +244,27 @@ export function registerFramework(parameters: PiCardDef) {
   register((r: PiRegister) => r.card("_window", parameters));
 }
 
+/**
+ * Run `fn` with the current Redux state as a **mutable Immer draft**,
+ * then automatically commit the mutations back to the store.
+ *
+ * Must be called after {@link start} has been invoked.
+ */
+export function withState<S extends ReduxState>(fn: (s: S) => void): void {
+  if (!_store) {
+    throw new Error("withState() called before start() — store not yet initialised");
+  }
+  const active = getActiveDraft();
+  if (active) {
+    fn(active as S);
+    return;
+  }
+  const draft = createDraft(_store.getState() as S) as unknown as S;
+  fn(draft);
+  const next = finishDraft(draft);
+  (_store as any).dispatch({ type: "pi/withState/commit", next });
+}
+
 export const DEFAULT_REDUX_STATE = {
   route: { path: [], query: {}, url: "", fromBrowser: false },
   pihanga: {},
@@ -226,16 +273,67 @@ export const DEFAULT_REDUX_STATE = {
 export type StartProps = {
   // redux settins
   /**
-   * A9: Enable the debug card-state subsystem (writes current card props into
-   * `state.pihanga.cards` every second).  Defaults to `false`; opt-in only
-   * when you need the Redux DevTools card view, as it adds a periodic
-   * `produce()` pass over the full state on every card render.
+   * Enable the debug card-state subsystem.  Defaults to `false`.
+   *
+   * When `false` (default): `state.pihanga.cards` is still populated with a
+   * lightweight string array of card names whose props changed in the last
+   * render cycle (mirrors `state.pihanga.reducers`).
+   *
+   * When `true`: additionally writes the full resolved card props into
+   * `state.pihanga.cardProps` on every render cycle.  Opt-in only when you
+   * need the Redux DevTools detailed card view, as it adds a `produce()` pass
+   * over the full state on every card render.
    */
   debugCardState?: boolean;
+  /**
+   * When `true`, RTK's serializable-state middleware check is disabled entirely.
+   * Use this as a last resort when your state intentionally contains non-serializable
+   * values (e.g. class instances, functions) that cannot be listed individually in
+   * `ignoredStatePaths`.  Prefer `ignoredStatePaths` for surgical suppression.
+   */
   disableSerializableStateCheck?: boolean;
+
+  /**
+   * When `true`, RTK's serializable-action middleware check is disabled entirely.
+   * Use this as a last resort when dispatched actions intentionally carry
+   * non-serializable payloads that cannot be listed individually in
+   * `ignoredActions` / `ignoredActionPaths`.
+   */
   disableSerializableActionCheck?: boolean;
+
+  /**
+   * Redux action `type` strings that should be exempt from RTK's serializable
+   * middleware check.  Merged with Pihanga's own built-in exemptions.
+   *
+   * @example
+   * ```ts
+   * ignoredActions: ["MY_FEATURE/UPLOAD_FILE"]
+   * ```
+   */
   ignoredActions?: string[];
+
+  /**
+   * Dot-notation paths **within action payloads** that RTK's serializable check
+   * should ignore.  Merged with Pihanga's own built-in exemptions (e.g. `"mapper"`,
+   * `"content"`, `"cause"`).
+   *
+   * @example
+   * ```ts
+   * ignoredActionPaths: ["payload.file", "meta.timestamp"]
+   * ```
+   */
   ignoredActionPaths?: string[];
+
+  /**
+   * Dot-notation paths **within the Redux state** that RTK's serializable check
+   * should ignore.  Merged with Pihanga's own built-in exemptions (e.g.
+   * `"cause.content"`).
+   *
+   * @example
+   * ```ts
+   * ignoredStatePaths: ["upload.fileHandle"]
+   * ```
+   */
   ignoredStatePaths?: string[];
 
   rootComponent?: (store: Store) => React.JSX.Element;
@@ -324,6 +422,8 @@ export function start<S extends Partial<ReduxState>>(
     return card("_window", { cardType: "framework", ...p });
   };
 
+  _store = store;
+
   const register: PiRegister = {
     window,
     card,
@@ -336,6 +436,7 @@ export function start<S extends Partial<ReduxState>>(
     POST: registerPOST(piReducer),
     PATCH: registerPATCH(piReducer),
     DELETE: registerDELETE(piReducer),
+    withState: <S extends ReduxState>(fn: (s: S) => void) => withState<S>(fn),
   };
   setRegisterF(register);
 
