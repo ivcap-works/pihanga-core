@@ -554,7 +554,7 @@ export const UPDATE_STATE_ACTION = "pi/card/update_state";
 export type CardTrackingLevel = false | "names" | "props" | "diff";
 
 type CardState = {
-  setTrackingLevel: (level: CardTrackingLevel) => void;
+  setTrackingLevel: (level: CardTrackingLevel, debounceMs?: number) => void;
   props: (
     cardName: string,
     cardProps: CompProps,
@@ -570,6 +570,7 @@ function createCardState(): CardState {
   let dispatch: (a: AnyAction) => any;
   let timer: number;
   let trackingLevel: CardTrackingLevel = "names";
+  let debounceMs = 1000;
 
   // Lightweight (always-on when tracking !== false): set of changed card names.
   // Emitted as pihanga.cards — mirrors pihanga.reducers.
@@ -583,8 +584,9 @@ function createCardState(): CardState {
   // side of the diff on the next change.
   const lastReportedProps: { [cardName: string]: CompProps } = {};
 
-  const setTrackingLevel = (level: CardTrackingLevel) => {
+  const setTrackingLevel = (level: CardTrackingLevel, ms?: number) => {
     trackingLevel = level;
+    if (ms !== undefined) debounceMs = ms;
   };
 
   const resetTimer = () => {
@@ -593,10 +595,9 @@ function createCardState(): CardState {
     }
     timer = window.setTimeout(() => {
       if (dispatch && pendingChangedNames.size > 0) {
-        clearTimeout(timer); // just in case
         dispatch({ type: UPDATE_STATE_ACTION });
       }
-    }, 1000);
+    }, debounceMs);
   };
 
   const props = (

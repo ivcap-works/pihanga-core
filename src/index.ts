@@ -290,6 +290,13 @@ export type StartProps = {
   cardTracking?: import("./card").CardTrackingLevel;
 
   /**
+   * Debounce delay (ms) between the last card render and the `pi/card/update_state`
+   * dispatch that writes `pihanga.cards` / `pihanga.cardDetails` to the Redux state.
+   * Defaults to `1000`.  Set to `0` for near-immediate reporting in development.
+   */
+  cardTrackingDebounceMs?: number;
+
+  /**
    * @deprecated Use `cardTracking: 'props'` instead.
    * Kept for backward compatibility — maps to `cardTracking: 'props'` when `true`.
    */
@@ -451,7 +458,7 @@ export function start<S extends Partial<ReduxState>>(
       : props.debugCardState
         ? "props"
         : "names";
-  RegisterCardState.setTrackingLevel(trackingLevel);
+  RegisterCardState.setTrackingLevel(trackingLevel, props.cardTrackingDebounceMs);
 
   const card = addCard(piReducer.register, dispatchF);
   const updateCard = updateOrRegisterCard(piReducer.register, dispatchF);

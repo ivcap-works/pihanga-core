@@ -286,6 +286,64 @@ async function loadAndCommit() {
 
 ---
 
+## Observing card changes via `pihanga.cards`
+
+Every Redux cycle, Pihanga tracks which card components re-rendered with changed props and writes
+a summary into `state.pihanga`.  This is surfaced as the `pi/card/update_state` action in Redux
+DevTools.
+
+!!! note "Timing"
+    React re-renders happen **after** the reducer for a user action has already run, so card change
+    information always appears on the *subsequent* `pi/card/update_state` action — never on the
+    action that caused the re-renders.  The default debounce window is 1 second, meaning up to
+    1 second of card changes are batched into a single report.
+
+### Configuration
+
+Control the level of detail and debounce window via `StartProps`:
+
+```ts
+start(initState, [appInit], {
+  cardTracking:          'diff', // 'names' | 'props' | 'diff' | false
+  cardTrackingDebounceMs: 0,     // 0 = fire as soon as React commits; default: 1000
+})
+```
+
+### Tracking levels
+
+| `cardTracking` | `pihanga.cards` | `pihanga.cardDetails` |
+|---|---|---|
+| `false` | not written | not written |
+| `'names'` *(default)* | `string[]` of changed card names | — |
+| `'props'` | `string[]` of changed card names | `{ [cardName]: { prop: value, … } }` |
+| `'diff'` | `string[]` of changed card names | `{ [cardName]: { props: {…}, changed: { prop: { from, to } } } }` |
+
+### Example DevTools state (level `'diff'`)
+
+```json
+{
+  "pihanga": {
+    "reducers": ["pi/router/navigate"],
+    "cards": ["app/sidebar", "app/content"],
+    "cardDetails": {
+      "app/sidebar": {
+        "props":   { "activePage": "items", "isOpen": true },
+        "changed": { "activePage": { "from": "home", "to": "items" } }
+      },
+      "app/content": {
+        "props":   { "items": ["a", "b", "c"] },
+        "changed": { "items": { "from": ["a", "b"], "to": ["a", "b", "c"] } }
+      }
+    }
+  }
+}
+```
+
+`pihanga.cards` mirrors `pihanga.reducers` in structure — both are cleared to `[]` at the start
+of every Redux cycle and populated on the cycle where they were active.
+
+---
+
 ## `dispatchPipe` — request/reply pattern
 
 `dispatchPipe` (available in `ReduceOpts`) wraps async Redux round-trips with automatic
