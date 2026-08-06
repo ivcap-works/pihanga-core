@@ -541,9 +541,20 @@ function renderUnknownCardType(cardType: string): React.JSX.Element {
 
 export const UPDATE_STATE_ACTION = "pi/card/update_state";
 
+/**
+ * Controls how much detail is captured for cards whose props changed.
+ *
+ * | Level | `pihanga.cards` | `pihanga.cardDetails` |
+ * |---|---|---|
+ * | `false` | not written | not written |
+ * | `'names'` (default) | `string[]` of changed card names | not written |
+ * | `'props'` | `string[]` of changed card names | `{ [cardName]: { [prop]: value } }` |
+ * | `'diff'` | `string[]` of changed card names | `{ [cardName]: { props: {...}, changed: { [prop]: { from, to } } } }` |
+ */
+export type CardTrackingLevel = false | "names" | "props" | "diff";
+
 type CardState = {
-  /** A9: enable the debug state-tracking subsystem (off by default). */
-  setEnabled: (enabled: boolean) => void;
+  setTrackingLevel: (level: CardTrackingLevel) => void;
   props: (
     cardName: string,
     cardProps: CompProps,
@@ -556,41 +567,26 @@ type CardState = {
 export const RegisterCardState = createCardState();
 
 function createCardState(): CardState {
-  type S = {
-    cardProps?: CompProps;
-    changedAt: number;
-    reportedAt: number;
-  };
-  const s: { [name: string]: S } = {};
   let dispatch: (a: AnyAction) => any;
   let timer: number;
-  let lastReport = 0;
-  // A9: off by default; opt-in via StartProps.debugCardState
-  let enabled = false;
+  let trackingLevel: CardTrackingLevel = "names";
 
-  // Always-on: lightweight list of card names whose props changed, reported via
-  // pihanga.cards on the next UPDATE_STATE_ACTION cycle (mirrors pihanga.reducers).
+  // Lightweight (always-on when tracking !== false): set of changed card names.
+  // Emitted as pihanga.cards — mirrors pihanga.reducers.
   const pendingChangedNames = new Set<string>();
 
-  const setEnabled = (flag: boolean) => {
-    enabled = flag;
+  // For 'props' / 'diff': current props snapshot + previous snapshot for diffing.
+  const pendingDetails: {
+    [cardName: string]: { cur: CompProps; prev?: CompProps };
+  } = {};
+  // Last props snapshot committed to pihanga.cardDetails — used as the "from"
+  // side of the diff on the next change.
+  const lastReportedProps: { [cardName: string]: CompProps } = {};
+
+  const setTrackingLevel = (level: CardTrackingLevel) => {
+    trackingLevel = level;
   };
 
-  // const timer
-  const getS = (cardName: string, props: CompProps): S => {
-    const name = cardName;
-    let e = s[name];
-    if (!e) {
-      const ts = Date.now();
-      e = {
-        changedAt: ts,
-        reportedAt: ts,
-      } as S;
-      s[name] = e;
-      resetTimer();
-    }
-    return e;
-  };
   const resetTimer = () => {
     if (timer) {
       clearTimeout(timer);
@@ -602,61 +598,76 @@ function createCardState(): CardState {
       }
     }, 1000);
   };
+
   const props = (
     cardName: string,
-    cardProps: CompProps,
+    _cardProps: CompProps,
     _dispatch: (a: AnyAction) => any,
   ) => {
     dispatch = _dispatch; // always capture the dispatcher so resetTimer can fire
-    if (!enabled) return; // A9: detailed props tracking is opt-in
-    const e = getS(cardName, cardProps);
-    e.cardProps = cardProps;
   };
+
   const changed = (cardName: string, isUnchanged: boolean, _props: CompProps) => {
+    if (trackingLevel === false) return;
     if (!isUnchanged) {
       logger.debug("card has changed:", cardName);
-      // Always track the card name; reducer will emit it as pihanga.cards.
       pendingChangedNames.add(cardName);
+      if (trackingLevel === "props" || trackingLevel === "diff") {
+        // Overwrite any earlier pending entry so we always diff against the
+        // last-committed snapshot (not a partially-flushed intermediate state).
+        pendingDetails[cardName] = {
+          cur: _props,
+          prev: lastReportedProps[cardName],
+        };
+      }
       resetTimer();
     }
-    if (!enabled) return; // A9: detailed props tracking is opt-in
-    const e = getS(cardName, _props);
-    e.reportedAt = Date.now();
-    if (!isUnchanged) {
-      e.changedAt = Date.now();
-    }
   };
+
   const reducer = (state: ReduxState) => {
-    // Always: report changed card names as pihanga.cards (mirrors pihanga.reducers).
+    if (trackingLevel === false) return;
+
+    // Always: emit the list of changed card names (mirrors pihanga.reducers).
     (state.pihanga ??= {}).cards = [...pendingChangedNames];
     pendingChangedNames.clear();
-    if (!enabled) {
-      lastReport = Date.now();
-      return;
-    }
-    // A9: detailed props tracking — populate pihanga.cardProps when debugCardState is on.
-    const pi = Object.values(s)
-      .filter((s) => s.reportedAt > lastReport)
-      .reduce(
-        (p, s) => {
-          const cname = s.cardProps?.cardName;
-          if (!cname) {
-            logger.warn("Unexpected missing card name", s);
-            return p;
+
+    if (trackingLevel === "props" || trackingLevel === "diff") {
+      const details: { [k: string]: any } = {};
+      for (const [name, { cur, prev }] of Object.entries(pendingDetails)) {
+        const safeProps = copySafeProps(cur);
+        delete safeProps.cardName; // redundant — it's the key
+        delete safeProps.cardKey;
+
+        if (trackingLevel === "diff") {
+          const changedProps: { [k: string]: { from: any; to: any } } = {};
+          if (prev) {
+            const safePrev = copySafeProps(prev);
+            delete safePrev.cardName;
+            delete safePrev.cardKey;
+            const allKeys = new Set([
+              ...Object.keys(safeProps),
+              ...Object.keys(safePrev),
+            ]);
+            allKeys.forEach((k) => {
+              if (!equal(safeProps[k], safePrev[k])) {
+                changedProps[k] = { from: safePrev[k], to: safeProps[k] };
+              }
+            });
           }
-          const name = cname;
-          const props = copySafeProps(s.cardProps || {});
-          delete props.cardName;
-          delete props._cls;
-          p[name] = props;
-          return p;
-        },
-        {} as { [k: string]: any },
-      );
-    (state.pihanga ??= {}).cardProps = pi;
-    lastReport = Date.now();
+          details[name] = { props: safeProps, changed: changedProps };
+        } else {
+          details[name] = safeProps;
+        }
+
+        // Snapshot current props so the next change can diff against them.
+        lastReportedProps[name] = cur;
+        delete pendingDetails[name];
+      }
+      (state.pihanga ??= {}).cardDetails = details;
+    }
   };
-  return { props, changed, reducer, setEnabled };
+
+  return { props, changed, reducer, setTrackingLevel };
 }
 
 function copySafeProps(props: CompProps): CompProps {

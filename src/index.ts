@@ -39,6 +39,7 @@ import {
 } from "./rest";
 import { RootComponent } from "./root";
 import { RegisterCardState } from "./card";
+export type { CardTrackingLevel } from "./card";
 const logger = getLogger("root");
 
 export type {
@@ -271,18 +272,26 @@ export const DEFAULT_REDUX_STATE = {
 };
 
 export type StartProps = {
-  // redux settins
+  // redux settings
   /**
-   * Enable the debug card-state subsystem.  Defaults to `false`.
+   * Controls how much detail is captured for cards whose props changed each
+   * render cycle.  Defaults to `'names'`.
    *
-   * When `false` (default): `state.pihanga.cards` is still populated with a
-   * lightweight string array of card names whose props changed in the last
-   * render cycle (mirrors `state.pihanga.reducers`).
+   * | Level | `pihanga.cards` | `pihanga.cardDetails` |
+   * |---|---|---|
+   * | `false` | not written | not written |
+   * | `'names'` (default) | `string[]` of changed card names | — |
+   * | `'props'` | `string[]` of changed card names | `{ [card]: { [prop]: value } }` |
+   * | `'diff'` | `string[]` of changed card names | `{ [card]: { props: {...}, changed: { [prop]: { from, to } } } }` |
    *
-   * When `true`: additionally writes the full resolved card props into
-   * `state.pihanga.cardProps` on every render cycle.  Opt-in only when you
-   * need the Redux DevTools detailed card view, as it adds a `produce()` pass
-   * over the full state on every card render.
+   * `'props'` and `'diff'` add a `produce()` pass on every card render, so
+   * opt in only when you need the Redux DevTools detailed card view.
+   */
+  cardTracking?: import("./card").CardTrackingLevel;
+
+  /**
+   * @deprecated Use `cardTracking: 'props'` instead.
+   * Kept for backward compatibility — maps to `cardTracking: 'props'` when `true`.
    */
   debugCardState?: boolean;
   /**
@@ -435,8 +444,14 @@ export function start<S extends Partial<ReduxState>>(
 
   dispatchF = store.dispatch;
 
-  // A9: only activate the debug card-state subsystem when explicitly requested.
-  RegisterCardState.setEnabled(props.debugCardState ?? false);
+  // Resolve tracking level: explicit cardTracking wins; debugCardState is legacy compat.
+  const trackingLevel =
+    props.cardTracking !== undefined
+      ? props.cardTracking
+      : props.debugCardState
+        ? "props"
+        : "names";
+  RegisterCardState.setTrackingLevel(trackingLevel);
 
   const card = addCard(piReducer.register, dispatchF);
   const updateCard = updateOrRegisterCard(piReducer.register, dispatchF);
