@@ -26,7 +26,7 @@ import { ON_INIT_ACTION, currentRoute, init as routerInit } from "./router";
 import { configureStore, isPlain, Store } from "@reduxjs/toolkit";
 
 //import monitorReducerEnhancer from "./monitor_enhancer"
-import { getLogger } from "./logger";
+import { getLogger, setLogConfig } from "./logger";
 import {
   PiRegisterDeleteProps,
   PiRegisterGetProps,
@@ -76,7 +76,8 @@ export {
   createCardDeclaration2,
   isCardRef,
 } from "./register_cards";
-export { getLogger } from "./logger";
+export { getLogger, setLogConfig } from "./logger";
+export type { LogConfig, LogLevelName } from "./logger";
 export type { PiCardProps, PiCardName, PiCardRef } from "./types";
 export type { ErrorAction as RestErrorAction } from "./rest";
 export { RestContentType } from "./rest";
@@ -391,6 +392,24 @@ export type StartProps = {
    * ```
    */
   routeQueryParam?: string;
+
+  /**
+   * Initial logging configuration.
+   *
+   * - `level` — global minimum log level for all loggers (default: `"info"`).
+   * - `blocks` — per-named-logger overrides; keys match the `name` passed to
+   *   {@link getLogger} (e.g. `"rest"`, `"pihanga"`, `"my/feature"`).
+   *
+   * Can be updated at any time after `start()` via {@link setLogConfig}.
+   *
+   * @example
+   * ```ts
+   * start(initState, [appInit], {
+   *   logging: { level: "warn", blocks: { "my/feature": "debug" } },
+   * });
+   * ```
+   */
+  logging?: import("./logger").LogConfig;
 };
 
 export function start<S extends Partial<ReduxState>>(
@@ -398,6 +417,10 @@ export function start<S extends Partial<ReduxState>>(
   inits: ((register: PiRegister) => void)[] = [],
   props: StartProps = {},
 ): PiRegister {
+  if (props.logging) {
+    setLogConfig(props.logging);
+  }
+
   const state = {
     ...DEFAULT_REDUX_STATE,
     ...initialState,

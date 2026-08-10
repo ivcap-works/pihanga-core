@@ -4,13 +4,10 @@ import equal from "fast-deep-equal";
 
 import { getLogger } from "./logger";
 import {
-  CSSModuleClasses,
   CardProp,
   PiCardDef,
-  PiReducer,
   PiStore,
   PiRegisterComponent,
-  PiRegisterReducerF,
   ReduceF,
   ReduxAction,
   ReduxState,
@@ -30,10 +27,6 @@ import {
 } from "./register_cards";
 
 const logger = getLogger("card");
-
-// export type CardProp = {
-//   cardName: PiCardRef
-// } & { [k: string]: any }
 
 type CompProps = { [k: string]: any };
 type CardInfo = {
