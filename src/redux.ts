@@ -1,5 +1,5 @@
 import { PiRegister, register } from ".";
-import { pihanga as logger } from "./logger";
+import { getLogger } from "./logger";
 import {
   CardAction,
   DispatchF,
@@ -8,6 +8,8 @@ import {
   ReduxState,
   ReplyAction,
 } from "./types";
+
+const logger = getLogger("redux");
 
 const ns2Actions: { [k: string]: boolean } = {};
 
@@ -34,7 +36,7 @@ export function registerActions<T extends string>(
   actions.forEach((a) => {
     ah[a.toUpperCase()] = `${namespace}/${a}`;
   });
-  logger.info(`Register action ns "${namespace}"`);
+  logger.debug(`Register action ns "${namespace}"`);
   ns2Actions[namespace] = true;
   return ah as { [S in Uppercase<T>]: string };
 }

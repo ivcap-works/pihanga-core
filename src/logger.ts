@@ -93,7 +93,9 @@ export const core = addStackTrace(
   new Logger({
     type: "pretty",
     name: "",
-    prettyLogTemplate: "{{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}} {{name}} ",
+    prettyLogTemplate:
+      "{{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}} [{{name}}] {{fileNameWithLine}}\t",
+    minLevel: 3, // "info" — matches the documented default
   }),
 );
 export const pihanga = addStackTrace(core.getSubLogger({ name: "pihanga" }));
