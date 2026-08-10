@@ -98,6 +98,38 @@ start(initState, [appInit])                        // cardTracking: 'names', deb
 | `ignoredStatePaths` | `string[]` | `[]` | Dot-notation paths inside the Redux state to ignore |
 | `isSerializable` | `(v: unknown) => boolean` | RTK default | Custom predicate for the serializable check |
 
+#### Logging
+
+| Option | Type | Default | Purpose |
+|---|---|---|---|
+| `logging.level` | `LogLevelName` | `"info"` | Global minimum log level (`"silly"` → `"fatal"`) |
+| `logging.blocks` | `Record<string, LogLevelName>` | `{}` | Per-named-logger overrides; keys match the `name` passed to `getLogger()` |
+
+`LogLevelName` values in ascending order: `"silly"`, `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`.
+
+The built-in logger names you can target in `blocks` are:
+
+| Name | What it covers |
+|---|---|
+| `"pihanga"` | Framework internals (card registration, routing) |
+| `"rest"` | All REST helper traffic (GET / POST / PUT / PATCH / DELETE) |
+| `"root"` | Bootstrap / `start()` lifecycle messages |
+| *(your name)* | Any logger created via `getLogger("your/name")` |
+
+The config can be updated at any point after `start()` by calling `setLogConfig`:
+
+```ts
+import { setLogConfig } from "@pihanga2/core";
+
+// Enable verbose REST logging while debugging a data-fetch issue
+setLogConfig({ blocks: { rest: "debug" } });
+
+// Quiet everything down again
+setLogConfig({ level: "warn" });
+```
+
+`setLogConfig` **merges** into the accumulated config — it does not replace it.
+
 #### Rendering
 
 | Option | Type | Default | Purpose |
@@ -128,6 +160,12 @@ start<AppState>(
 
     // Static-site deployment: encode routes as ?p=items/42
     routeQueryParam: "p",
+
+    // Silence framework noise in production; keep REST traffic visible for ops
+    logging: {
+      level: "warn",
+      blocks: { rest: "info" },
+    },
   },
 );
 ```
