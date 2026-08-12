@@ -96,6 +96,10 @@ export const core = addStackTrace(
     prettyLogTemplate:
       "{{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}} [{{name}}] {{fileNameWithLine}}\t",
     minLevel: 3, // "info" — matches the documented default
+    prettyLogStyles: {
+      // override the tslog default that renders {{name}} in white
+      name: ["bold", "cyan"],
+    },
   }),
 );
 export const pihanga = addStackTrace(core.getSubLogger({ name: "pihanga" }));
