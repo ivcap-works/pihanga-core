@@ -582,6 +582,143 @@ maintainable cards — study its card implementations before generating new ones
 
 ---
 
+## Testing REST handlers with mocks
+
+`@pihanga2/core/rest/mock` provides `registerRestMock` / `clearRestMocks` to intercept HTTP calls in tests without hitting a real network.  Import it **instead of** setting up a real server — the hook is installed automatically when the module is first imported.
+
+### Test file boilerplate
+
+`@pihanga2/core/rest/mock` exports a test harness that reduces the per-file boilerplate to the irreducible Vitest minimum — only **two lines** that cannot be extracted to a shared helper (`vi.hoisted` / `vi.mock` must appear in the file being transformed):
+
+```ts
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  clearRestMocks, registerRestMock,
+  piCoreMockFactory, createRestTestHarness,
+} from "@pihanga2/core/rest/mock"
+import type { PiMockState } from "@pihanga2/core/rest/mock"
+import { registerGET, registerPOST /* … */ } from "@pihanga2/core/rest"
+import { createOnDispatchPipe } from "@pihanga2/core"   // if testing dispatch pipes
+
+// ── Two unavoidable Vitest lines ──────────────────────────────────────────
+// vi.hoisted() runs BEFORE imports are resolved — its callback MUST NOT call
+// any imported function (TDZ crash). Write the PiMockState object inline.
+// piCoreMockFactory() is safe inside vi.mock because that factory is called
+// lazily, only when "@pihanga2/core" is first imported (after all static
+// imports are resolved).
+const _s = vi.hoisted((): PiMockState => ({
+  currentPiRegister: null,
+  oneShotHandlers: {},
+  pendingCallbacks: [],
+}))
+vi.mock("@pihanga2/core", (io) => piCoreMockFactory(io, _s))
+
+// ── One-time harness setup ─────────────────────────────────────────────────
+const { createSetup, flush, afterEachCleanup } = createRestTestHarness(_s)
+afterEach(() => { clearRestMocks(); afterEachCleanup() })
+```
+
+`piCoreMockFactory` handles everything that was previously hand-written in every test file:
+- buffers / fires `register()` calls against the mock PiRegister
+- re-implements `createOnDispatchPipe` to use the mock register (necessary because `createOnDispatchPipe` closes over the real `register` in the same ESM module scope — `vi.mock` cannot intercept intra-module calls)
+
+> **Note:** if your test file is inside `src/rest/` (co-located with the core), mock `"../index"` instead of `"@pihanga2/core"`.
+
+### Pattern 1 — Simple REST handler test
+
+```ts
+it("GET returns mocked body", async () => {
+  registerRestMock("GET /api/items/:id", () => ({ status: 200, body: { id: "7" } }))
+
+  const { mockReducer, dispatch, dispatched } = createMockSetup()
+
+  registerGET<any, any, { id: string }>(mockReducer as any)({
+    name: "loadItem",
+    origin: "http://localhost",
+    trigger: "ITEM/LOAD",
+    url: "/api/items/:id",
+    request: (a: any) => ({ id: a.id }),
+    reply: (_s, item, d) => { d({ type: "ITEM/LOADED", item }) },
+  })
+
+  dispatch({ type: "ITEM/LOAD", id: "7" })
+  await flush()
+
+  const loaded = dispatched.find((a) => a.type === "ITEM/LOADED")
+  expect(loaded?.item).toEqual({ id: "7" })
+})
+```
+
+### Pattern 2 — Testing existing production init code (no duplication)
+
+If your feature module registers its handler at module level:
+
+```ts
+// tagging.init.ts  (production code — untouched)
+import { register } from "@pihanga2/core"
+register((r) => {
+  r.POST<ReduxState, TagServiceAction, TagPredictorReplyWire, never, TagServiceReplyAction>({
+    name: "tagService",
+    trigger: TAGGING_ACTION.REQUEST,
+    url: "/api/tag",
+    // reply MUST return the action (not call dispatch) for dispatch-pipe correlation
+    reply: (_state, data) => ({ type: TAGGING_ACTION.REPLY, tags: data.tags }),
+  })
+})
+```
+
+The test imports the module — `createMockSetup()` replays the buffered `register()` call:
+
+```ts
+import "./tagging.init"           // triggers the buffered register()
+import { dispatchTagFragment } from "./tagging"
+
+it("pipe onReply fires with predicted tags", async () => {
+  registerRestMock("POST /api/tag", () => ({ status: 200, body: { tags: ["sky"] } }))
+
+  const { dispatch } = createMockSetup()   // replays tagging.init's register()
+
+  let result: any
+  dispatchTagFragment(dispatch as any, { fragment: "hello" },
+    (_s: any, a: any) => { result = a.tags },
+  )
+  await flush()
+
+  expect(result).toEqual(["sky"])
+})
+```
+
+### Pattern 3 — Dispatch pipe (`createOnDispatchPipe`) correlation
+
+For dispatch pipes, the REST handler's `reply` **must return** the domain action instead of calling `dispatch(...)`.  This lets `utils.ts` inject `_replyTo: trigger._id`, which the pipe's one-shot reducer uses for correlation.
+
+```ts
+// ✅ pipe-compatible — utils.ts injects _replyTo
+reply: (_state, data) => ({ type: TAGGING_ACTION.REPLY, tags: data.tags })
+
+// ❌ pipe-incompatible — _replyTo is never added, pipe's isReply() always fails
+reply: (_state, data, dispatch) => { dispatch({ type: TAGGING_ACTION.REPLY, tags: data.tags }) }
+```
+
+The `RA` type parameter on `r.POST<S, A, R, C, RA>` enforces this at compile time — specify the return action type and TypeScript will require `reply` to return it:
+
+```ts
+r.POST<ReduxState, TagAction, TagReplyWire, never, TagServiceReplyAction>({ … })
+//                                                  ^^^^^^^^^^^^^^^^^^^^ RA
+```
+
+### Key rules
+
+| Rule | Reason |
+|---|---|
+| Call `createMockSetup()` **before** dispatching any actions | It sets `currentPiRegister`; before that, `register()` just buffers |
+| `await flush()` after the trigger dispatch | The mock fetch is still async (Promise-based) |
+| `reply` returns the action for pipe-correlated handlers | `utils.ts` must see the return value to inject `_replyTo` |
+| `clearRestMocks()` in `afterEach` | Prevents mock leakage between tests |
+| Import the production init module at the top of the test file | Module-level code runs once; `createMockSetup()` replays the buffered `register()` |
+
+---
+
 ## Common pitfalls
 
 | Pitfall | Fix |

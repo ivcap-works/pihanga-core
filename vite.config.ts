@@ -26,6 +26,7 @@ export default defineConfig({
       entry: {
         index: "src/index.ts",
         "rest/index": "src/rest/index.ts",
+        "rest/mock": "src/rest/mock.ts",
       },
       formats: ["es"],
     },

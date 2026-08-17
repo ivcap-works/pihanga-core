@@ -25,10 +25,10 @@ const PATCH_TYPES = registerActions("pi/rest/patch", [
   "internal_error",
 ]);
 
-export function registerPOST<S extends ReduxState, A extends ReduxAction, R, C = any>(
+export function registerPOST<S extends ReduxState, A extends ReduxAction, R, C = unknown>(
   reducer: PiReducer,
-): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
-  return function (props: PiRegisterPoPuPaProps<S, A, R>) {
+): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
+  return function (props: PiRegisterPoPuPaProps<S, A, R, C>) {
     const { name, request } = props;
 
     const submitType = `${POST_TYPES.SUBMITTED}/${name}`;
@@ -48,10 +48,10 @@ export function registerPOST<S extends ReduxState, A extends ReduxAction, R, C =
   };
 }
 
-export function registerPUT<S extends ReduxState, A extends ReduxAction, R, C = any>(
+export function registerPUT<S extends ReduxState, A extends ReduxAction, R, C = unknown>(
   reducer: PiReducer,
-): (props: PiRegisterPoPuPaProps<S, A, R>) => void {
-  return function (props: PiRegisterPoPuPaProps<S, A, R>) {
+): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
+  return function (props: PiRegisterPoPuPaProps<S, A, R, C>) {
     const { name, request } = props;
 
     const submitType = `${PUT_TYPES.SUBMITTED}/${name}`;
@@ -71,10 +71,13 @@ export function registerPUT<S extends ReduxState, A extends ReduxAction, R, C = 
   };
 }
 
-export function registerPATCH<S extends ReduxState, A extends ReduxAction, R, C = any>(
-  reducer: PiReducer,
-): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
-  return function (props: PiRegisterPoPuPaProps<S, A, R>) {
+export function registerPATCH<
+  S extends ReduxState,
+  A extends ReduxAction,
+  R,
+  C = unknown,
+>(reducer: PiReducer): (props: PiRegisterPoPuPaProps<S, A, R, C>) => void {
+  return function (props: PiRegisterPoPuPaProps<S, A, R, C>) {
     const { name, request } = props;
 
     const submitType = `${PATCH_TYPES.SUBMITTED}/${name}`;

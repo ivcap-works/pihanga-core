@@ -451,7 +451,9 @@ describe("registerCommon — replyMapper", () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     expect(replyMapper).toHaveBeenCalledOnce();
-    expect(replyMapper).toHaveBeenCalledWith({ id: 42 }, expect.any(Object));
+    expect(replyMapper).toHaveBeenCalledWith(
+      expect.objectContaining({ content: { id: 42 } }),
+    );
     expect(reply).toHaveBeenCalledOnce();
     expect(reply).toHaveBeenCalledWith(
       expect.any(Object),

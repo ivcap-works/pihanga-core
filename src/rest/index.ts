@@ -5,4 +5,4 @@ export { registerDELETE } from "./delete";
 
 export type * from "./types";
 export * from "./enums";
-export { jsonReplyMapper, textReplyMapper } from "./mappers";
+export { jsonReplyMapper, textReplyMapper, zodReplyMapper } from "./mappers";

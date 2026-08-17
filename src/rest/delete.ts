@@ -11,15 +11,18 @@ const DELETE_TYPES = registerActions("pi/rest/delete", [
   "internal_error",
 ]);
 
-export function registerDELETE<S extends ReduxState, A extends ReduxAction, R, C = any>(
-  reducer: PiReducer,
-): (props: PiRegisterDeleteProps<S, A, R, C>) => void {
-  return function (props: PiRegisterDeleteProps<S, A, R>) {
+export function registerDELETE<
+  S extends ReduxState,
+  A extends ReduxAction,
+  R,
+  C = unknown,
+>(reducer: PiReducer): (props: PiRegisterDeleteProps<S, A, R, C>) => void {
+  return function (props: PiRegisterDeleteProps<S, A, R, C>) {
     _registerDELETE(props, reducer);
   };
 }
 
-function _registerDELETE<S extends ReduxState, A extends ReduxAction, R, C = any>(
+function _registerDELETE<S extends ReduxState, A extends ReduxAction, R, C = unknown>(
   props: PiRegisterDeleteProps<S, A, R, C>,
   reducer: PiReducer,
 ) {

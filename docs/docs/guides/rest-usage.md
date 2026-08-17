@@ -453,6 +453,209 @@ On non-2xx responses, the REST module dispatches an `ErrorAction` containing:
 
 You can attach an `error(...)` handler per call, or centralize handling. See [Usage: Request context + auth](#usage-request-context--auth-common-pattern) for a reusable strategy.
 
+## Mocking REST calls in tests
+
+Import from `@pihanga2/core/rest/mock` to intercept Pihanga REST calls in
+Vitest **without hitting a real network**.
+
+The mock system hooks into the same internal fetch shim that the REST
+registration helpers use, so your `reply`, `error`, and lifecycle action
+handlers all fire exactly as they would in production — no Redux store mocking
+or `vi.stubGlobal("fetch", …)` boilerplate required.
+
+!!! tip "Comprehensive testing guide"
+    This section focuses on the REST mock API surface. For complete patterns
+    covering production init code, dispatch pipes, and card testing, see the
+    **[Testing Guide](testing.md)**.
+
+### Pattern syntax
+
+| Pattern | Matches |
+|---|---|
+| `"GET /api/items/:id"` | HTTP GET + pathname `/api/items/<any-segment>` |
+| `"/api/items"` | Any HTTP method + exact pathname `/api/items` |
+| `/\/api\/items\/\d+/` | Any URL whose full string matches the RegExp |
+
+`:param` in string patterns matches exactly one non-slash path segment —
+consistent with the URL template syntax used in `registerGET` / `registerPOST` / …
+
+Mocks are evaluated in **registration order**; the first match wins.
+
+### Mock handler return values
+
+| Return value | Effect |
+|---|---|
+| `{ status, body?, headers? }` | Intercepts the call; `body` is the parsed content |
+| `undefined` | Falls through to the next matching mock or real `fetch` |
+| Throw | Treated as a network-level failure → dispatches `INTERNAL_ERROR` |
+
+### Examples
+
+**Success response (object body):**
+
+```ts
+registerRestMock("GET /api/items/:id", (url) => ({
+  status: 200,
+  body: { id: url.pathname.split("/").pop(), name: "Widget" },
+}))
+```
+
+**Success response (array / list):**
+
+```ts
+registerRestMock("GET /api/items", () => ({
+  status: 200,
+  body: [{ id: "1" }, { id: "2" }],
+}))
+```
+
+**Error response (non-2xx → your `error` handler fires):**
+
+```ts
+registerRestMock("GET /api/gone", () => ({ status: 404, body: { error: "not found" } }))
+```
+
+**Network failure (throws → dispatches `INTERNAL_ERROR`):**
+
+```ts
+registerRestMock(/\/api\/broken/, () => { throw new Error("Network failure") })
+```
+
+**Text response:**
+
+```ts
+registerRestMock("GET /api/report.csv", () => ({
+  status: 200,
+  body: "col1,col2\nval1,val2",
+  headers: { "content-type": "text/csv" },
+}))
+```
+
+**Fall-through (let specific IDs through; mock everything else):**
+
+```ts
+registerRestMock("GET /api/items/:id", (url) => {
+  if (url.pathname.endsWith("/secret")) return undefined  // real fetch
+  return { status: 200, body: { name: "Mocked" } }
+})
+```
+
+**POST mock (body ignored; always succeeds):**
+
+```ts
+registerRestMock("POST /api/items", () => ({ status: 201, body: { id: "new-42" } }))
+```
+
+### Full integration test using the test harness
+
+Use `createRestTestHarness` to eliminate per-file boilerplate. Only two Vitest
+lines remain unavoidable in each file (`vi.hoisted` / `vi.mock` must appear in
+the file being transformed):
+
+```ts
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  clearRestMocks, registerRestMock,
+  createPiMockState, piCoreMockFactory, createRestTestHarness,
+} from "@pihanga2/core/rest/mock"
+
+// ── Two unavoidable Vitest lines ──────────────────────────────────────────────
+const _s = vi.hoisted(() => createPiMockState())
+vi.mock("@pihanga2/core", (io) => piCoreMockFactory(io, _s))
+
+// ── One-time harness setup ────────────────────────────────────────────────────
+const { createSetup, flush, afterEachCleanup } = createRestTestHarness(_s)
+afterEach(() => { clearRestMocks(); afterEachCleanup() })
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("loadItem", () => {
+  it("trigger → fetch → reply called with mocked body", async () => {
+    registerRestMock("GET /api/items/:id", () => ({
+      status: 200,
+      body: { id: "42", name: "Widget" },
+    }))
+
+    const { dispatched, mockReducer, dispatch } = createSetup()
+
+    // Register exactly as your production init code does:
+    mockReducer.GET({
+      name: "loadItem",
+      origin: "http://localhost",
+      trigger: "ITEM/LOAD",
+      url: "/api/items/:id",
+      request: (action: any) => ({ id: action.id }),
+      reply: (_state: any, item: any, d: any) => { d({ type: "ITEM/LOADED", item }) },
+    })
+
+    dispatch({ type: "ITEM/LOAD", id: "42" })
+    await flush()
+
+    const loaded = dispatched.find((a) => a.type === "ITEM/LOADED")
+    expect(loaded?.item).toEqual({ id: "42", name: "Widget" })
+  })
+
+  it("full lifecycle action sequence is recorded", async () => {
+    registerRestMock("GET /api/items/:id", () => ({
+      status: 200,
+      body: { id: "7", name: "Sprocket" },
+    }))
+
+    const { dispatched, mockReducer, dispatch } = createSetup()
+
+    mockReducer.GET({
+      name: "loadItem",
+      origin: "http://localhost",
+      trigger: "ITEM/LOAD",
+      url: "/api/items/:id",
+      request: (action: any) => ({ id: action.id }),
+      reply: (_state: any, item: any, d: any) => { d({ type: "ITEM/LOADED", item }) },
+    })
+
+    dispatch({ type: "ITEM/LOAD", id: "7" })
+    await flush()
+
+    const types = dispatched.map((a: any) => a.type)
+    expect(types).toContain("ITEM/LOAD")                         // trigger
+    expect(types).toContain("pi/rest/get/submitted/loadItem")    // lifecycle
+    expect(types).toContain("pi/rest/get/result/loadItem")       // lifecycle
+    expect(types).toContain("ITEM/LOADED")                       // domain reply
+  })
+
+  it("error response → error handler fires, reply is NOT called", async () => {
+    registerRestMock("GET /api/items/:id", () => ({ status: 404 }))
+
+    const { dispatched, mockReducer, dispatch } = createSetup()
+    const reply = vi.fn()
+
+    mockReducer.GET({
+      name: "loadItem",
+      origin: "http://localhost",
+      trigger: "ITEM/LOAD",
+      url: "/api/items/:id",
+      request: (action: any) => ({ id: action.id }),
+      reply,
+      error: (_state: any, errAction: any, _req: any, d: any) => {
+        d({ type: "ITEM/FAILED", statusCode: errAction.statusCode })
+      },
+    })
+
+    dispatch({ type: "ITEM/LOAD", id: "99" })
+    await flush()
+
+    expect(reply).not.toHaveBeenCalled()
+    const failed = dispatched.find((a: any) => a.type === "ITEM/FAILED")
+    expect(failed?.statusCode).toBe(404)
+  })
+})
+```
+
+### Production safety
+
+The mock module **only activates when imported** — it uses a module-level
+callback pattern so that production bundles which never import
+`@pihanga2/core/rest/mock` contain zero mock code.
+
 ## Debugging / internals
 
 ### Where the code lives

@@ -216,6 +216,15 @@ export type PiRegisterReducerF = <S extends ReduxState, A extends ReduxAction>(
 
 export type PiReducerCancelF = () => void;
 
+/**
+ * Minimal register surface needed by {@link createOnAction} and
+ * {@link createOnDispatch} helpers in redux.ts.  Using this structural type
+ * instead of the full PiRegister breaks the redux→index circular dependency.
+ */
+export type PiRegisterMinimal = {
+  reducer: { register: PiRegisterReducerF };
+};
+
 // B7: added `key` parameter (was silently missing) and corrected return type
 // from `void` to `PiReducerCancelF` — the implementation has always returned a
 // cancel function; callers relying on the old type lost both the key and the

@@ -12,6 +12,10 @@ import {
   PiMapProps,
   WindowProps,
   GenericCardParameterT,
+  ReplyAction,
+  DispatchF,
+  ReduceF,
+  PiReducerCancelF,
 } from "./types";
 import {
   addCard,
@@ -66,8 +70,75 @@ export {
   actionTypesToEvents,
   createOnAction,
   createOnDispatch,
-  createOnDispatchPipe,
 } from "./redux";
+
+/**
+ * Dispatches `dispatchAction` and registers one-shot reducers that call
+ * `onReply` (or optional `onError`) synchronously inside the active Immer
+ * `produce()` call when the awaited action arrives.
+ *
+ * `register` is called here (in index.ts where it is defined) rather than in
+ * redux.ts to break the redux→index circular dependency that caused a TDZ
+ * crash under Vitest's vi.mock hoisting.
+ *
+ * Usage:
+ *   const fetchDocument = createOnDispatchPipe<FetchDocumentEvent, DocumentFetchedEvent>(
+ *     CATALOG_ACTION.FETCH_DOCUMENT,
+ *     CATALOG_ACTION.DOCUMENT_FETCHED,
+ *   );
+ *   fetchDocument(dispatch, { url }, (state, result) => { state.doc = result.doc });
+ */
+export const createOnDispatchPipe =
+  <TEvent extends object, TResult extends object, TError extends object = object>(
+    dispatchAction: string,
+    awaitAction: string,
+    errorAwaitAction?: string,
+  ) =>
+  <S extends ReduxState = ReduxState>(
+    d: DispatchF,
+    ev: TEvent,
+    onReply: ReduceF<S, TResult & ReplyAction>,
+    onError?: ReduceF<S, TError & ReplyAction>,
+  ): void => {
+    const evID = d({ ...ev, type: dispatchAction });
+
+    function isReply(a: ReplyAction): boolean {
+      const replyTo = a._replyTo;
+      if (!replyTo) {
+        console.warn("action is not a ReplyAction", a);
+        return false;
+      }
+      return replyTo === evID;
+    }
+
+    register((r) => {
+      let ec: PiReducerCancelF | null = null;
+      const rc = r.reducer.registerOneShot<S, TResult & ReplyAction>(
+        awaitAction,
+        (s, a, d, opts) => {
+          if (!isReply(a)) return false;
+          if (ec) ec();
+          onReply(s, a, d, opts);
+          return true;
+        },
+        0,
+        evID,
+      );
+      if (errorAwaitAction && onError) {
+        ec = r.reducer.registerOneShot<S, TError & ReplyAction>(
+          errorAwaitAction,
+          (s, a, d, opts) => {
+            if (!isReply(a)) return false;
+            rc();
+            onError(s, a, d, opts);
+            return true;
+          },
+          0,
+          evID,
+        );
+      }
+    });
+  };
 export { Card, usePiReducer, cls_f } from "./card";
 export {
   memo,
@@ -115,20 +186,50 @@ export interface PiRegister {
    */
   metaCard<C>(declaration: PiRegisterMetaCard): void;
 
-  GET<S extends ReduxState, A extends ReduxAction, R, C = any>(
-    props: PiRegisterGetProps<S, A, R, C>,
+  GET<
+    S extends ReduxState,
+    A extends ReduxAction,
+    R,
+    C = unknown,
+    RA extends ReduxAction = never,
+  >(
+    props: PiRegisterGetProps<S, A, R, C, RA>,
   ): void;
-  PUT<S extends ReduxState, A extends ReduxAction, R, C = any>(
-    props: PiRegisterPoPuPaProps<S, A, R, C>,
+  PUT<
+    S extends ReduxState,
+    A extends ReduxAction,
+    R,
+    C = unknown,
+    RA extends ReduxAction = never,
+  >(
+    props: PiRegisterPoPuPaProps<S, A, R, C, RA>,
   ): void;
-  POST<S extends ReduxState, A extends ReduxAction, R, C = any>(
-    props: PiRegisterPoPuPaProps<S, A, R, C>,
+  POST<
+    S extends ReduxState,
+    A extends ReduxAction,
+    R,
+    C = unknown,
+    RA extends ReduxAction = never,
+  >(
+    props: PiRegisterPoPuPaProps<S, A, R, C, RA>,
   ): void;
-  PATCH<S extends ReduxState, A extends ReduxAction, R, C = any>(
-    props: PiRegisterPoPuPaProps<S, A, R, C>,
+  PATCH<
+    S extends ReduxState,
+    A extends ReduxAction,
+    R,
+    C = unknown,
+    RA extends ReduxAction = never,
+  >(
+    props: PiRegisterPoPuPaProps<S, A, R, C, RA>,
   ): void;
-  DELETE<S extends ReduxState, A extends ReduxAction, R, C = any>(
-    props: PiRegisterDeleteProps<S, A, R, C>,
+  DELETE<
+    S extends ReduxState,
+    A extends ReduxAction,
+    R,
+    C = unknown,
+    RA extends ReduxAction = never,
+  >(
+    props: PiRegisterDeleteProps<S, A, R, C, RA>,
   ): void;
   //registerPeriodicGET<S extends ReduxState, A extends ReduxAction, R>(props: PiRegisterPeridicGetProps<S, A, R>): void;
 

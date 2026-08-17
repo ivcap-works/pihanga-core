@@ -38,6 +38,7 @@ nav:
       - Routing: guides/routing.md
       - REST API: guides/rest-api.md
       - REST Full Reference: guides/rest-usage.md
+      - Testing: guides/testing.md
   - API Reference:
       - Overview: api/overview.md
       - register / registerCard: api/register.md
@@ -71,6 +72,7 @@ plugins:
           - guides/routing.md
           - guides/rest-api.md
           - guides/rest-usage.md
+          - guides/testing.md
         API Reference:
           - api/overview.md
           - api/register.md

@@ -1,6 +1,6 @@
 {
   "name": "@pihanga2/core",
-  "version": "0.3.36",
+  "version": "0.3.37",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,10 @@
     "./rest": {
       "types": "./dist/rest/index.d.ts",
       "default": "./dist/rest/index.js"
+    },
+    "./rest/mock": {
+      "types": "./dist/rest/mock.d.ts",
+      "default": "./dist/rest/mock.js"
     },
     "./rest/*": {
       "types": "./dist/rest/*.d.ts",

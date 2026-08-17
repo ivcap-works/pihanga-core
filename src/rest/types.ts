@@ -1,6 +1,6 @@
 import { RestContentType } from "..";
 import { registerActions } from "../redux";
-import { DispatchF, ReduxAction, ReduxState } from "../types";
+import { DispatchF, ReduxAction, ReduxState, ReplyAction } from "../types";
 
 export const Domain = "pi/rest";
 /**
@@ -54,8 +54,9 @@ export type PoPuPaRequest = {
 export type RegisterGenericProps<
   S extends ReduxState,
   A extends ReduxAction,
-  R,
-  C = any,
+  RR,
+  C = unknown,
+  RA extends ReduxAction = never,
 > = {
   name: string;
   origin?: string | ((action: A, state: S, context: C) => string | URL); // if defined, will be prepended to 'url' (URL(window.location.href).origin)
@@ -64,13 +65,13 @@ export type RegisterGenericProps<
   context?: (action: A, state: S) => Promise<C> | null;
   guard?: (action: A, state: S, dispatcher: DispatchF, context: C) => boolean;
   headers?: (action: A, state: S, context: C) => { [key: string]: string };
-  replyMapper?: (raw: unknown, headers: { [k: string]: string }) => Promise<R>;
+  replyMapper?: (r: HttpResponse) => Promise<RR>;
   reply: (
     state: S,
-    reply: R,
+    reply: RR,
     dispatcher: DispatchF,
     result: ResultAction<A>,
-  ) => ReduxAction | void;
+  ) => [RA] extends [never] ? void : RA;
   error?: (
     state: S,
     error: ErrorAction<A>,
@@ -83,8 +84,9 @@ export type PiRegisterGetProps<
   S extends ReduxState,
   A extends ReduxAction,
   R,
-  C = any,
-> = RegisterGenericProps<S, A, R, C> & {
+  C = unknown,
+  RA extends ReduxAction = never,
+> = RegisterGenericProps<S, A, R, C, RA> & {
   request?: (action: A, state: S) => Bindings;
 };
 
@@ -92,8 +94,9 @@ export type PiRegisterPoPuPaProps<
   S extends ReduxState,
   A extends ReduxAction,
   R,
-  C = any,
-> = RegisterGenericProps<S, A, R, C> & {
+  C = unknown,
+  RA extends ReduxAction = never,
+> = RegisterGenericProps<S, A, R, C, RA> & {
   request: (action: A, state: S) => PoPuPaRequest;
 };
 
@@ -101,8 +104,9 @@ export type PiRegisterDeleteProps<
   S extends ReduxState,
   A extends ReduxAction,
   R,
-  C = any,
-> = RegisterGenericProps<S, A, R, C> & {
+  C = unknown,
+  RA extends ReduxAction = never,
+> = RegisterGenericProps<S, A, R, C, RA> & {
   request?: (action: A, state: S) => Bindings;
 };
 

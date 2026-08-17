@@ -74,7 +74,12 @@ export type RequestF<S extends ReduxState, A extends ReduxAction> = (
   action: A,
 ) => [RequestInit, Bindings];
 
-export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C = any>(
+export function registerCommon<
+  S extends ReduxState,
+  A extends ReduxAction,
+  R,
+  C = unknown,
+>(
   reducer: PiReducer,
   props: RegisterGenericProps<S, A, R, C>,
   requestF: RequestF<S, A>,
@@ -178,7 +183,7 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
             (resp.mimeType.startsWith("text/") ? textReplyMapper : jsonReplyMapper);
           let content: R;
           try {
-            content = (await effectiveMapper(resp.content, resp.headers)) as R;
+            content = (await effectiveMapper(resp)) as R;
           } catch (mapErr: unknown) {
             const errResp: HttpResponse = {
               ...resp,
@@ -215,7 +220,7 @@ export function registerCommon<S extends ReduxState, A extends ReduxAction, R, C
   }
 
   reducer.register<S, ResultAction<A>>(resultType, (state, ra, dispatch) => {
-    const replyAction = reply(state, ra.content, dispatch, ra);
+    const replyAction = reply(state, ra.content, dispatch, ra) as ReplyAction | void;
     if (replyAction) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (typeof (replyAction as any).type !== "string") {
@@ -300,7 +305,34 @@ function resolveBinding(
   }
 }
 
-function _fetch(url: URL, request: RequestInit): Promise<HttpResponse> {
+// ── Mock hook ─────────────────────────────────────────────────────────────────
+
+/**
+ * Resolver injected by `src/rest/mock.ts` when it is imported.
+ * Stays `null` in production builds where mock.ts is never imported,
+ * so the check in `_fetch` compiles away cleanly.
+ */
+type MockResolverF = (url: URL, request: RequestInit) => Promise<HttpResponse | null>;
+let _mockResolver: MockResolverF | null = null;
+
+/**
+ * Called once — at module-load time — by `src/rest/mock.ts`.
+ * Not intended for direct use by application code.
+ * @internal
+ */
+export function _setMockResolver(fn: MockResolverF): void {
+  _mockResolver = fn;
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+
+async function _fetch(url: URL, request: RequestInit): Promise<HttpResponse> {
+  // If a mock resolver has been installed (by importing @pihanga2/core/rest/mock),
+  // give it first crack.  null → fall through to real fetch.
+  if (_mockResolver) {
+    const mocked = await _mockResolver(url, request);
+    if (mocked !== null) return mocked;
+  }
   return fetch(url, request)
     .then(parseResponse)
     .then(([content, contentType, mimeType, response]) => {
