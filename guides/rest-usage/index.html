@@ -19,7 +19,7 @@
         <link rel="prev" href="../rest-api/">
       
       
-        <link rel="next" href="../../api/overview/">
+        <link rel="next" href="../testing/">
       
       
         
@@ -1128,6 +1128,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mocking-rest-calls-in-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mocking REST calls in tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mocking REST calls in tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-handler-return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock handler return values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-integration-test-using-the-test-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full integration test using the test harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#debugging-internals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1203,6 +1275,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1881,6 +1981,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mocking-rest-calls-in-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mocking REST calls in tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mocking REST calls in tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-handler-return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock handler return values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-integration-test-using-the-test-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full integration test using the test harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#debugging-internals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2431,6 +2603,207 @@
 <li><code>request</code> (the original trigger action)</li>
 </ul>
 <p>You can attach an <code>error(...)</code> handler per call, or centralize handling. See <a href="#usage-request-context--auth-common-pattern">Usage: Request context + auth</a> for a reusable strategy.</p>
+<h2 id="mocking-rest-calls-in-tests">Mocking REST calls in tests<a class="headerlink" href="#mocking-rest-calls-in-tests" title="Permanent link">&para;</a></h2>
+<p>Import from <code>@pihanga2/core/rest/mock</code> to intercept Pihanga REST calls in
+Vitest <strong>without hitting a real network</strong>.</p>
+<p>The mock system hooks into the same internal fetch shim that the REST
+registration helpers use, so your <code>reply</code>, <code>error</code>, and lifecycle action
+handlers all fire exactly as they would in production — no Redux store mocking
+or <code>vi.stubGlobal("fetch", …)</code> boilerplate required.</p>
+<div class="admonition tip">
+<p class="admonition-title">Comprehensive testing guide</p>
+<p>This section focuses on the REST mock API surface. For complete patterns
+covering production init code, dispatch pipes, and card testing, see the
+<strong><a href="../testing/">Testing Guide</a></strong>.</p>
+</div>
+<h3 id="pattern-syntax">Pattern syntax<a class="headerlink" href="#pattern-syntax" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"GET /api/items/:id"</code></td>
+<td>HTTP GET + pathname <code>/api/items/&lt;any-segment&gt;</code></td>
+</tr>
+<tr>
+<td><code>"/api/items"</code></td>
+<td>Any HTTP method + exact pathname <code>/api/items</code></td>
+</tr>
+<tr>
+<td><code>/\/api\/items\/\d+/</code></td>
+<td>Any URL whose full string matches the RegExp</td>
+</tr>
+</tbody>
+</table>
+<p><code>:param</code> in string patterns matches exactly one non-slash path segment —
+consistent with the URL template syntax used in <code>registerGET</code> / <code>registerPOST</code> / …</p>
+<p>Mocks are evaluated in <strong>registration order</strong>; the first match wins.</p>
+<h3 id="mock-handler-return-values">Mock handler return values<a class="headerlink" href="#mock-handler-return-values" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Return value</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{ status, body?, headers? }</code></td>
+<td>Intercepts the call; <code>body</code> is the parsed content</td>
+</tr>
+<tr>
+<td><code>undefined</code></td>
+<td>Falls through to the next matching mock or real <code>fetch</code></td>
+</tr>
+<tr>
+<td>Throw</td>
+<td>Treated as a network-level failure → dispatches <code>INTERNAL_ERROR</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<p><strong>Success response (object body):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items/:id&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">url.pathname.split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">).</span><span class="nx">pop</span><span class="p">(),</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Widget&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">}))</span>
+</code></pre></div>
+<p><strong>Success response (array / list):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;2&quot;</span><span class="w"> </span><span class="p">}],</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">}))</span>
+</code></pre></div>
+<p><strong>Error response (non-2xx → your <code>error</code> handler fires):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/gone&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">404</span><span class="p">,</span><span class="w"> </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">error</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;not found&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}))</span>
+</code></pre></div>
+<p><strong>Network failure (throws → dispatches <code>INTERNAL_ERROR</code>):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="sr">/\/api\/broken/</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="ne">Error</span><span class="p">(</span><span class="s2">&quot;Network failure&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">})</span>
+</code></pre></div>
+<p><strong>Text response:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/report.csv&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;col1,col2\nval1,val2&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s2">&quot;content-type&quot;</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;text/csv&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="p">}))</span>
+</code></pre></div>
+<p><strong>Fall-through (let specific IDs through; mock everything else):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items/:id&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">.</span><span class="nx">pathname</span><span class="p">.</span><span class="nx">endsWith</span><span class="p">(</span><span class="s2">&quot;/secret&quot;</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">undefined</span><span class="w">  </span><span class="c1">// real fetch</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span><span class="w"> </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Mocked&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="p">})</span>
+</code></pre></div>
+<p><strong>POST mock (body ignored; always succeeds):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;POST /api/items&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">201</span><span class="p">,</span><span class="w"> </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;new-42&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}))</span>
+</code></pre></div>
+<h3 id="full-integration-test-using-the-test-harness">Full integration test using the test harness<a class="headerlink" href="#full-integration-test-using-the-test-harness" title="Permanent link">&para;</a></h3>
+<p>Use <code>createRestTestHarness</code> to eliminate per-file boilerplate. Only two Vitest
+lines remain unavoidable in each file (<code>vi.hoisted</code> / <code>vi.mock</code> must appear in
+the file being transformed):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">afterEach</span><span class="p">,</span><span class="w"> </span><span class="nx">describe</span><span class="p">,</span><span class="w"> </span><span class="nx">expect</span><span class="p">,</span><span class="w"> </span><span class="nx">it</span><span class="p">,</span><span class="w"> </span><span class="nx">vi</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;vitest&quot;</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nx">clearRestMocks</span><span class="p">,</span><span class="w"> </span><span class="nx">registerRestMock</span><span class="p">,</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nx">createPiMockState</span><span class="p">,</span><span class="w"> </span><span class="nx">piCoreMockFactory</span><span class="p">,</span><span class="w"> </span><span class="nx">createRestTestHarness</span><span class="p">,</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;@pihanga2/core/rest/mock&quot;</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1">// ── Two unavoidable Vitest lines ──────────────────────────────────────────────</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="kd">const</span><span class="w"> </span><span class="nx">_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">vi</span><span class="p">.</span><span class="nx">hoisted</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">createPiMockState</span><span class="p">())</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="nx">vi</span><span class="p">.</span><span class="nx">mock</span><span class="p">(</span><span class="s2">&quot;@pihanga2/core&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">io</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">piCoreMockFactory</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">_s</span><span class="p">))</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1">// ── One-time harness setup ────────────────────────────────────────────────────</span>
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createSetup</span><span class="p">,</span><span class="w"> </span><span class="nx">flush</span><span class="p">,</span><span class="w"> </span><span class="nx">afterEachCleanup</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createRestTestHarness</span><span class="p">(</span><span class="nx">_s</span><span class="p">)</span>
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="nx">afterEach</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">clearRestMocks</span><span class="p">();</span><span class="w"> </span><span class="nx">afterEachCleanup</span><span class="p">()</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>
+<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="c1">// ── Tests ─────────────────────────────────────────────────────────────────────</span>
+<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>
+<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="nx">describe</span><span class="p">(</span><span class="s2">&quot;loadItem&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="w">  </span><span class="nx">it</span><span class="p">(</span><span class="s2">&quot;trigger → fetch → reply called with mocked body&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="w">    </span><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items/:id&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a><span class="w">      </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span>
+<a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a><span class="w">      </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;42&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Widget&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a><span class="w">    </span><span class="p">}))</span>
+<a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>
+<a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">,</span><span class="w"> </span><span class="nx">mockReducer</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createSetup</span><span class="p">()</span>
+<a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>
+<a id="__codelineno-20-26" name="__codelineno-20-26" href="#__codelineno-20-26"></a><span class="w">    </span><span class="c1">// Register exactly as your production init code does:</span>
+<a id="__codelineno-20-27" name="__codelineno-20-27" href="#__codelineno-20-27"></a><span class="w">    </span><span class="nx">mockReducer</span><span class="p">.</span><span class="nx">GET</span><span class="p">({</span>
+<a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a><span class="w">      </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;loadItem&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a><span class="w">      </span><span class="nx">origin</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;http://localhost&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-30" name="__codelineno-20-30" href="#__codelineno-20-30"></a><span class="w">      </span><span class="nx">trigger</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-31" name="__codelineno-20-31" href="#__codelineno-20-31"></a><span class="w">      </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/items/:id&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-32" name="__codelineno-20-32" href="#__codelineno-20-32"></a><span class="w">      </span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">action</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">action.id</span><span class="w"> </span><span class="p">}),</span>
+<a id="__codelineno-20-33" name="__codelineno-20-33" href="#__codelineno-20-33"></a><span class="w">      </span><span class="nx">reply</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_state</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">item</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">d</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOADED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">item</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-20-34" name="__codelineno-20-34" href="#__codelineno-20-34"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-20-35" name="__codelineno-20-35" href="#__codelineno-20-35"></a>
+<a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a><span class="w">    </span><span class="nx">dispatch</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;42&quot;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-37" name="__codelineno-20-37" href="#__codelineno-20-37"></a><span class="w">    </span><span class="k">await</span><span class="w"> </span><span class="nx">flush</span><span class="p">()</span>
+<a id="__codelineno-20-38" name="__codelineno-20-38" href="#__codelineno-20-38"></a>
+<a id="__codelineno-20-39" name="__codelineno-20-39" href="#__codelineno-20-39"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">loaded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">.</span><span class="nx">find</span><span class="p">((</span><span class="nx">a</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="kr">type</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">&quot;ITEM/LOADED&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-40" name="__codelineno-20-40" href="#__codelineno-20-40"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">loaded</span><span class="o">?</span><span class="p">.</span><span class="nx">item</span><span class="p">).</span><span class="nx">toEqual</span><span class="p">({</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;42&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Widget&quot;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-41" name="__codelineno-20-41" href="#__codelineno-20-41"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-20-42" name="__codelineno-20-42" href="#__codelineno-20-42"></a>
+<a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a><span class="w">  </span><span class="nx">it</span><span class="p">(</span><span class="s2">&quot;full lifecycle action sequence is recorded&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a><span class="w">    </span><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items/:id&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span>
+<a id="__codelineno-20-45" name="__codelineno-20-45" href="#__codelineno-20-45"></a><span class="w">      </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">200</span><span class="p">,</span>
+<a id="__codelineno-20-46" name="__codelineno-20-46" href="#__codelineno-20-46"></a><span class="w">      </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;7&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Sprocket&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-20-47" name="__codelineno-20-47" href="#__codelineno-20-47"></a><span class="w">    </span><span class="p">}))</span>
+<a id="__codelineno-20-48" name="__codelineno-20-48" href="#__codelineno-20-48"></a>
+<a id="__codelineno-20-49" name="__codelineno-20-49" href="#__codelineno-20-49"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">,</span><span class="w"> </span><span class="nx">mockReducer</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createSetup</span><span class="p">()</span>
+<a id="__codelineno-20-50" name="__codelineno-20-50" href="#__codelineno-20-50"></a>
+<a id="__codelineno-20-51" name="__codelineno-20-51" href="#__codelineno-20-51"></a><span class="w">    </span><span class="nx">mockReducer</span><span class="p">.</span><span class="nx">GET</span><span class="p">({</span>
+<a id="__codelineno-20-52" name="__codelineno-20-52" href="#__codelineno-20-52"></a><span class="w">      </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;loadItem&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-53" name="__codelineno-20-53" href="#__codelineno-20-53"></a><span class="w">      </span><span class="nx">origin</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;http://localhost&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-54" name="__codelineno-20-54" href="#__codelineno-20-54"></a><span class="w">      </span><span class="nx">trigger</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-55" name="__codelineno-20-55" href="#__codelineno-20-55"></a><span class="w">      </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/items/:id&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-56" name="__codelineno-20-56" href="#__codelineno-20-56"></a><span class="w">      </span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">action</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">action.id</span><span class="w"> </span><span class="p">}),</span>
+<a id="__codelineno-20-57" name="__codelineno-20-57" href="#__codelineno-20-57"></a><span class="w">      </span><span class="nx">reply</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_state</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">item</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">d</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOADED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">item</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-20-58" name="__codelineno-20-58" href="#__codelineno-20-58"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-20-59" name="__codelineno-20-59" href="#__codelineno-20-59"></a>
+<a id="__codelineno-20-60" name="__codelineno-20-60" href="#__codelineno-20-60"></a><span class="w">    </span><span class="nx">dispatch</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;7&quot;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-61" name="__codelineno-20-61" href="#__codelineno-20-61"></a><span class="w">    </span><span class="k">await</span><span class="w"> </span><span class="nx">flush</span><span class="p">()</span>
+<a id="__codelineno-20-62" name="__codelineno-20-62" href="#__codelineno-20-62"></a>
+<a id="__codelineno-20-63" name="__codelineno-20-63" href="#__codelineno-20-63"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">types</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">.</span><span class="nx">map</span><span class="p">((</span><span class="nx">a</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="kr">type</span><span class="p">)</span>
+<a id="__codelineno-20-64" name="__codelineno-20-64" href="#__codelineno-20-64"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">types</span><span class="p">).</span><span class="nx">toContain</span><span class="p">(</span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">)</span><span class="w">                         </span><span class="c1">// trigger</span>
+<a id="__codelineno-20-65" name="__codelineno-20-65" href="#__codelineno-20-65"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">types</span><span class="p">).</span><span class="nx">toContain</span><span class="p">(</span><span class="s2">&quot;pi/rest/get/submitted/loadItem&quot;</span><span class="p">)</span><span class="w">    </span><span class="c1">// lifecycle</span>
+<a id="__codelineno-20-66" name="__codelineno-20-66" href="#__codelineno-20-66"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">types</span><span class="p">).</span><span class="nx">toContain</span><span class="p">(</span><span class="s2">&quot;pi/rest/get/result/loadItem&quot;</span><span class="p">)</span><span class="w">       </span><span class="c1">// lifecycle</span>
+<a id="__codelineno-20-67" name="__codelineno-20-67" href="#__codelineno-20-67"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">types</span><span class="p">).</span><span class="nx">toContain</span><span class="p">(</span><span class="s2">&quot;ITEM/LOADED&quot;</span><span class="p">)</span><span class="w">                       </span><span class="c1">// domain reply</span>
+<a id="__codelineno-20-68" name="__codelineno-20-68" href="#__codelineno-20-68"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-20-69" name="__codelineno-20-69" href="#__codelineno-20-69"></a>
+<a id="__codelineno-20-70" name="__codelineno-20-70" href="#__codelineno-20-70"></a><span class="w">  </span><span class="nx">it</span><span class="p">(</span><span class="s2">&quot;error response → error handler fires, reply is NOT called&quot;</span><span class="p">,</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-71" name="__codelineno-20-71" href="#__codelineno-20-71"></a><span class="w">    </span><span class="nx">registerRestMock</span><span class="p">(</span><span class="s2">&quot;GET /api/items/:id&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="kt">404</span><span class="w"> </span><span class="p">}))</span>
+<a id="__codelineno-20-72" name="__codelineno-20-72" href="#__codelineno-20-72"></a>
+<a id="__codelineno-20-73" name="__codelineno-20-73" href="#__codelineno-20-73"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">,</span><span class="w"> </span><span class="nx">mockReducer</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatch</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">createSetup</span><span class="p">()</span>
+<a id="__codelineno-20-74" name="__codelineno-20-74" href="#__codelineno-20-74"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">reply</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">vi</span><span class="p">.</span><span class="nx">fn</span><span class="p">()</span>
+<a id="__codelineno-20-75" name="__codelineno-20-75" href="#__codelineno-20-75"></a>
+<a id="__codelineno-20-76" name="__codelineno-20-76" href="#__codelineno-20-76"></a><span class="w">    </span><span class="nx">mockReducer</span><span class="p">.</span><span class="nx">GET</span><span class="p">({</span>
+<a id="__codelineno-20-77" name="__codelineno-20-77" href="#__codelineno-20-77"></a><span class="w">      </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;loadItem&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-78" name="__codelineno-20-78" href="#__codelineno-20-78"></a><span class="w">      </span><span class="nx">origin</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;http://localhost&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-79" name="__codelineno-20-79" href="#__codelineno-20-79"></a><span class="w">      </span><span class="nx">trigger</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-80" name="__codelineno-20-80" href="#__codelineno-20-80"></a><span class="w">      </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;/api/items/:id&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-81" name="__codelineno-20-81" href="#__codelineno-20-81"></a><span class="w">      </span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">action</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">action.id</span><span class="w"> </span><span class="p">}),</span>
+<a id="__codelineno-20-82" name="__codelineno-20-82" href="#__codelineno-20-82"></a><span class="w">      </span><span class="nx">reply</span><span class="p">,</span>
+<a id="__codelineno-20-83" name="__codelineno-20-83" href="#__codelineno-20-83"></a><span class="w">      </span><span class="nx">error</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">_state</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">errAction</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">_req</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-84" name="__codelineno-20-84" href="#__codelineno-20-84"></a><span class="w">        </span><span class="nx">d</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/FAILED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">statusCode</span><span class="o">:</span><span class="w"> </span><span class="kt">errAction.statusCode</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-85" name="__codelineno-20-85" href="#__codelineno-20-85"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-20-86" name="__codelineno-20-86" href="#__codelineno-20-86"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-20-87" name="__codelineno-20-87" href="#__codelineno-20-87"></a>
+<a id="__codelineno-20-88" name="__codelineno-20-88" href="#__codelineno-20-88"></a><span class="w">    </span><span class="nx">dispatch</span><span class="p">({</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ITEM/LOAD&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;99&quot;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-20-89" name="__codelineno-20-89" href="#__codelineno-20-89"></a><span class="w">    </span><span class="k">await</span><span class="w"> </span><span class="nx">flush</span><span class="p">()</span>
+<a id="__codelineno-20-90" name="__codelineno-20-90" href="#__codelineno-20-90"></a>
+<a id="__codelineno-20-91" name="__codelineno-20-91" href="#__codelineno-20-91"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">reply</span><span class="p">).</span><span class="nx">not</span><span class="p">.</span><span class="nx">toHaveBeenCalled</span><span class="p">()</span>
+<a id="__codelineno-20-92" name="__codelineno-20-92" href="#__codelineno-20-92"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">failed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">dispatched</span><span class="p">.</span><span class="nx">find</span><span class="p">((</span><span class="nx">a</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="kr">type</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">&quot;ITEM/FAILED&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-93" name="__codelineno-20-93" href="#__codelineno-20-93"></a><span class="w">    </span><span class="nx">expect</span><span class="p">(</span><span class="nx">failed</span><span class="o">?</span><span class="p">.</span><span class="nx">statusCode</span><span class="p">).</span><span class="nx">toBe</span><span class="p">(</span><span class="mf">404</span><span class="p">)</span>
+<a id="__codelineno-20-94" name="__codelineno-20-94" href="#__codelineno-20-94"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-20-95" name="__codelineno-20-95" href="#__codelineno-20-95"></a><span class="p">})</span>
+</code></pre></div>
+<h3 id="production-safety">Production safety<a class="headerlink" href="#production-safety" title="Permanent link">&para;</a></h3>
+<p>The mock module <strong>only activates when imported</strong> — it uses a module-level
+callback pattern so that production bundles which never import
+<code>@pihanga2/core/rest/mock</code> contain zero mock code.</p>
 <h2 id="debugging-internals">Debugging / internals<a class="headerlink" href="#debugging-internals" title="Permanent link">&para;</a></h2>
 <h3 id="where-the-code-lives">Where the code lives<a class="headerlink" href="#where-the-code-lives" title="Permanent link">&para;</a></h3>
 <ul>

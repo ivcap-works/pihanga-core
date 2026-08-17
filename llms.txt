@@ -23,6 +23,7 @@ Redux store bootstrap, hash/history routing, and typed REST-API helpers.
 - [Routing](https://ivcap-works.github.io/pihanga-core/guides/routing/index.md)
 - [REST API](https://ivcap-works.github.io/pihanga-core/guides/rest-api/index.md)
 - [REST Full Reference](https://ivcap-works.github.io/pihanga-core/guides/rest-usage/index.md)
+- [Testing](https://ivcap-works.github.io/pihanga-core/guides/testing/index.md)
 
 ## API Reference
 
