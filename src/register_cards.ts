@@ -135,6 +135,12 @@ export function _registerCard(
   overrideEvents?: { [key: string]: string },
 ): string {
   if (cardMappings[name]) {
+    if (
+      cardMappings[name].parameters === parameters ||
+      equal(cardMappings[name].parameters, parameters)
+    ) {
+      return name; // identical re-registration — nothing to do
+    }
     logger.warn(`Overwriting definition for card "${name}"`);
   }
   // C6: use resolveCardType to eliminate the duplicated framework-fallback lookup
