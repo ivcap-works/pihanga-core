@@ -17,6 +17,7 @@ import {
   createCardDeclaration2,
   isCardRef,
   memo,
+  metaCardCtxtPropsStore,
   registerMetacard,
   removeCardMapping,
   resolveCardType,
@@ -578,6 +579,191 @@ describe("metacard event mapper — onXxxMapper forwarded from mapper-returned c
     const mapping = cardMappings[cardName];
     expect(mapping.props["onClickedMapper"]).toBeUndefined();
     expect(mapping.eventMappers["onClicked"]).toBe(myMapper);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `resolve` support in plain onXxx event-handler reducers (metacard props)
+// ---------------------------------------------------------------------------
+
+describe("processEventParameter — plain onXxx handlers receive opts.resolve", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+
+  // Tracking reducer captures the wrapped handler so we can invoke it directly,
+  // simulating a dispatched action for the card.
+  function makeTrackingReducer(): {
+    reducer: PiRegisterReducerF;
+    registrations: Array<{ type: string; wrapper: (...args: any[]) => any }>;
+  } {
+    const registrations: Array<{ type: string; wrapper: (...args: any[]) => any }> =
+      [];
+    const reducer: PiRegisterReducerF = (eventType, mapper) => {
+      registrations.push({ type: eventType, wrapper: mapper });
+      return () => {};
+    };
+    return { reducer, registrations };
+  }
+
+  it("plain onXxx handler on a regular (non-metacard) card receives a resolve() that returns plain values as-is", () => {
+    const cardType = `resolve-plain-${uid()}`;
+    const cardName = `resolve-plain-inst-${uid()}`;
+    const { reducer, registrations } = makeTrackingReducer();
+
+    addCardComponent({
+      name: cardType,
+      component: () => null,
+      events: { onClicked: `${cardType}/clicked` },
+    });
+
+    let capturedResolve: ((prop: any) => any) | undefined;
+    const handler = vi.fn((_s: any, _a: any, _d: any, opts: any) => {
+      capturedResolve = opts.resolve;
+    });
+
+    _createCardMapping(cardName, { cardType, onClicked: handler } as any, reducer, {
+      onClicked: `${cardType}/clicked`,
+    });
+
+    const reg = registrations.find((r) => r.type === `${cardType}/clicked`);
+    expect(reg).toBeDefined();
+
+    reg!.wrapper({}, { type: `${cardType}/clicked`, cardID: cardName }, vi.fn(), {});
+    expect(handler).toHaveBeenCalledOnce();
+    expect(capturedResolve).toBeTypeOf("function");
+    // Plain (non-function) values pass through resolve() unchanged.
+    expect(capturedResolve!("plain-value")).toBe("plain-value");
+    expect(capturedResolve!(42)).toBe(42);
+  });
+
+  it("plain onXxx handler receives a resolve() that invokes a state-mapper function prop", () => {
+    const cardType = `resolve-fn-${uid()}`;
+    const cardName = `resolve-fn-inst-${uid()}`;
+    const { reducer, registrations } = makeTrackingReducer();
+
+    addCardComponent({
+      name: cardType,
+      component: () => null,
+      events: { onClicked: `${cardType}/clicked` },
+    });
+
+    let capturedResolve: ((prop: any) => any) | undefined;
+    const handler = vi.fn((_s: any, _a: any, _d: any, opts: any) => {
+      capturedResolve = opts.resolve;
+    });
+
+    _createCardMapping(cardName, { cardType, onClicked: handler } as any, reducer, {
+      onClicked: `${cardType}/clicked`,
+    });
+
+    const reg = registrations.find((r) => r.type === `${cardType}/clicked`);
+    const fakeState = { value: 99 };
+    reg!.wrapper(fakeState, { type: `${cardType}/clicked`, cardID: cardName }, vi.fn(), {});
+
+    // A "selector"-style prop: (state, ctx) => value
+    const selector = vi.fn((s: any) => s.value * 2);
+    expect(capturedResolve!(selector)).toBe(198);
+    expect(selector).toHaveBeenCalledWith(fakeState, expect.anything());
+  });
+
+  it("resolve() for a metacard's plain onXxx handler resolves against the metacard's ctxtProps (metaCtxtProps)", () => {
+    const innerType = `resolve-meta-inner-${uid()}`;
+    const metaType = `resolve-meta-${uid()}`;
+    const metaName = `resolve-meta-inst-${uid()}`;
+    const { reducer, registrations } = makeTrackingReducer();
+
+    addCardComponent({
+      name: innerType,
+      component: () => null,
+      events: { onClicked: `${innerType}/clicked` },
+    });
+
+    const registerCardF: RegisterCardF = (name, params) =>
+      _registerCard(name, params, reducer);
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: () => ({ cardType: innerType }) as any,
+      events: { onSelected: `${metaType}/selected` } as any,
+    });
+
+    let capturedResolve: ((prop: any) => any) | undefined;
+    const consumerHandler = vi.fn((_s: any, _a: any, _d: any, opts: any) => {
+      capturedResolve = opts.resolve;
+    });
+
+    // Register the metacard instance with a `value` prop that is a state
+    // selector, and a plain onSelected handler.
+    const valueSelector = (s: any) => s.count;
+    _registerCard(
+      metaName,
+      { cardType: metaType, value: valueSelector, onSelected: consumerHandler } as any,
+      reducer,
+    );
+
+    // Simulate the top card's render writing its ctxtProps into the store
+    // (this is normally done synchronously by GenericCardComponent in card.tsx).
+    metaCardCtxtPropsStore[metaName] = {
+      cardName: metaName,
+      value: valueSelector,
+    } as any;
+
+    const reg = registrations.find((r) => r.type === `${metaType}/selected`);
+    expect(reg).toBeDefined();
+
+    const fakeState = { count: 7 };
+    reg!.wrapper(fakeState, { type: `${metaType}/selected`, cardID: metaName }, vi.fn(), {});
+
+    expect(consumerHandler).toHaveBeenCalledOnce();
+    expect(capturedResolve).toBeTypeOf("function");
+    // resolve(props.value) should invoke the selector against the current state.
+    expect(capturedResolve!(valueSelector)).toBe(7);
+
+    delete metaCardCtxtPropsStore[metaName];
+  });
+
+  it("resolve() is only exposed to the top card of a metacard, not treated as metaCtxtProps for itself", () => {
+    // The top card of a metacard instance has metaCard.topCard === cardName,
+    // so its own resolve() should NOT look up metaCardCtxtPropsStore (that store
+    // entry is only relevant for SUB-cards of the metacard instance).
+    const cardType = `resolve-top-${uid()}`;
+    const metaType = `resolve-top-meta-${uid()}`;
+    const metaName = `resolve-top-inst-${uid()}`;
+    const { reducer, registrations } = makeTrackingReducer();
+
+    addCardComponent({
+      name: cardType,
+      component: () => null,
+      events: { onClicked: `${cardType}/clicked` },
+    });
+
+    const registerCardF: RegisterCardF = (name, params) =>
+      _registerCard(name, params, reducer);
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: () => ({ cardType }) as any,
+      events: { onClicked: `${metaType}/clicked` } as any,
+    });
+
+    let capturedResolve: ((prop: any) => any) | undefined;
+    const handler = vi.fn((_s: any, _a: any, _d: any, opts: any) => {
+      capturedResolve = opts.resolve;
+    });
+
+    _registerCard(
+      metaName,
+      { cardType: metaType, onClicked: handler } as any,
+      reducer,
+    );
+
+    const reg = registrations.find((r) => r.type === `${metaType}/clicked`);
+    expect(reg).toBeDefined();
+
+    reg!.wrapper({}, { type: `${metaType}/clicked`, cardID: metaName }, vi.fn(), {});
+    expect(handler).toHaveBeenCalledOnce();
+    // Even without any metaCardCtxtPropsStore entry, resolve() must still work
+    // for plain values (falls back to ctxtProps: {}).
+    expect(capturedResolve!("static")).toBe("static");
   });
 });
 

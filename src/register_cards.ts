@@ -2,6 +2,7 @@ import equal from "fast-deep-equal";
 import { getLogger } from "./logger";
 import {
   CardAction,
+  CardProp,
   DispatchF,
   GenericCardParameterT,
   MetaCardMapperF,
@@ -21,6 +22,18 @@ import {
 } from "./types";
 
 const logger = getLogger("card-register");
+
+/**
+ * Stores the raw `CardProp` (i.e. `ctxtProps`) that was passed to the top-level
+ * card of each active metacard instance.  Written synchronously during render
+ * (see `card.tsx`) so sub-cards — and, via `processEventParameter` below,
+ * plain `onXxx` event-handler reducers — can read it.
+ *
+ * Lives here (rather than in `card.tsx`) so that `processEventParameter`'s
+ * `resolve` support doesn't require a circular import between `card.tsx` and
+ * `register_cards.ts`.
+ */
+export const metaCardCtxtPropsStore: { [topCardName: string]: CardProp } = {};
 
 export function isCardRef(p: any): boolean {
   return p !== null && typeof p === "object" && p.cardType !== undefined;
@@ -489,21 +502,39 @@ function processEventParameter(
       state: ReduxState,
       action: CardAction,
       dispatch: DispatchF,
+      opts: any,
     ) => void;
     const cancel = registerReducer(
       actionType,
-      (s, a, d) => {
+      (s, a, d, opts) => {
         const ca = a as CardAction;
         if (ca.cardID === cardName) {
-          r(s, ca, d); // mutates the Immer draft; return value is deliberately discarded
+          // Build a `resolve()` (mirrors the one available to onXxxMapper /
+          // state-mapper props) so plain `onXxx` handlers can also read
+          // metacard props that may be plain values or state selectors.
+          const metaCard = cardMappings[cardName]?.metaCard;
+          const metaCtxtProps =
+            metaCard && metaCard.topCard !== cardName
+              ? metaCardCtxtPropsStore[metaCard.topCard]
+              : undefined;
+          const resolve = (prop: any): any =>
+            typeof prop === "function" ? prop(s, resolveCtxt) : prop;
+          const resolveCtxt = {
+            cardName,
+            ctxtProps: metaCtxtProps ?? {},
+            metaCtxtProps,
+            resolve,
+          };
+          r(s, ca, d, { ...opts, resolve }); // mutates the Immer draft; return value is deliberately discarded
         }
       },
       0,
       `on card ${cardName} for ${propName}`,
-      r,
+      r as unknown as (s: ReduxState, a: CardAction, d: DispatchF) => void,
     );
     reducerCancels.push(cancel);
   }
+
   if (propName === `${evName}Mapper`) {
     logger.debug("processEventParameter", cardName);
 

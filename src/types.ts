@@ -104,6 +104,26 @@ export interface ReduceOpts<S extends ReduxState> {
   rawState: Readonly<S>;
 
   /**
+   * Resolve a metacard prop that may be a plain value or a `StateMapper`, using
+   * the current redux state and (for sub-cards of a metacard) the placement
+   * `ctxtProps` of the metacard's top card.
+   *
+   * Only populated for reducers registered via a card's `onXxx` event-handler
+   * prop (i.e. `processEventParameter` in `register_cards.ts`); `undefined`
+   * for reducers registered directly with `register.reducer.register` / a
+   * `createOnAction` helper outside of a card context.
+   *
+   * @example
+   * ```ts
+   * onClicked: (state, ev, dispatch, opts) => {
+   *   const current = opts.resolve!(props.value);
+   *   state.count = current + 1;
+   * },
+   * ```
+   */
+  resolve?: <T>(prop: T | StateMapper<T, any, any>) => T;
+
+  /**
    * Dispatch a request action (after the current reducer has finished) and then
    * handle the next matching reply.
    */
@@ -322,10 +342,35 @@ export type EventHandler<T, S extends ReduxState> = {
   [Key in keyof T]?: ReduceF<S, T[Key] & ReduxAction>;
 };
 
+/**
+ * Context passed as the second argument to an `onXxxMapper` event-mapper
+ * function. Extends the raw ctxtProps type `C` with `resolve` — the same
+ * `resolve` provided to state mappers via {@link StateMapperContext} — so
+ * mappers can read metacard props that may be plain values or state
+ * selectors.
+ *
+ * @example
+ * ```ts
+ * onClickedMapper: (ev, {resolve}) => ({
+ *   type: COUNTER_ACTION.CHANGED,
+ *   value: resolve(props.value) + 1,
+ * }),
+ * ```
+ */
+export type EventMapperCtxt<C = PiDefCtxtProps> = C & {
+  /** Resolve a metacard prop that may be a plain value or a StateMapper. */
+  resolve: <T>(prop: T | StateMapper<T, any, C>) => T;
+  /**
+   * For sub-cards of a metacard, the `ctxtProps` from where the metacard's
+   * top card was placed. `undefined` otherwise.
+   */
+  metaCtxtProps?: any;
+};
+
 export type EventMapper<T, C = PiDefCtxtProps> = {
   [Key in keyof T as `${Key & string}Mapper`]?: (
     ev: T[Key],
-    ctxt: C,
+    ctxt: EventMapperCtxt<C>,
   ) => ReduxAction | null;
 };
 

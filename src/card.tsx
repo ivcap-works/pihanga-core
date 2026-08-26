@@ -24,6 +24,7 @@ import {
   resolveCardType,
   dispatch2registerReducer,
   CardMapping,
+  metaCardCtxtPropsStore,
 } from "./register_cards";
 
 const logger = getLogger("card");
@@ -34,13 +35,12 @@ type CardInfo = {
   cardType: PiRegisterComponent;
 };
 
-/**
- * Stores the raw `CardProp` (i.e. `ctxtProps`) that was passed to the top-level
- * card of each active metacard instance.  Written synchronously during render so
- * sub-cards can read it in the same render cycle.  Cleaned up on unmount via a
- * `useEffect` destructor in `GenericCard`.
- */
-const metaCardCtxtPropsStore: { [topCardName: string]: CardProp } = {};
+// `metaCardCtxtPropsStore` (the raw `CardProp` passed to the top-level card of
+// each active metacard instance) now lives in `register_cards.ts` so that
+// `processEventParameter`'s `resolve()` for plain `onXxx` handlers can read it
+// without a circular import. Written synchronously during render (below) so
+// sub-cards can read it in the same render cycle. Cleaned up on unmount via a
+// `useEffect` destructor in `GenericCard`.
 
 /**
  * Anonymous card names whose owning component instance has COMMITTED (its
