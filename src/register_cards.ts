@@ -319,6 +319,56 @@ function normalizeEventKeys(events: { [k: string]: string } | undefined): {
   );
 }
 
+/**
+ * Rewrite a metacard's raw call-site `parameters` into the "live" props the
+ * mapper actually receives.
+ *
+ * The metacard mapper (`mc.mapper`) runs exactly ONCE, when the metacard
+ * instance is first registered — its return value (a sub-tree of real cards)
+ * is what gets rendered from then on. If the mapper were simply handed the
+ * raw `parameters` object, any PLAIN (non-selector) value baked into it —
+ * e.g. `Foo({count: 0.42})` used inline as an anonymous card, which is
+ * re-created (with a new literal) on every parent render — would be captured
+ * once inside the mapper's closure and never change again, even though a
+ * selector prop (`Foo({count: (s) => s.count})`) stays reactive because
+ * `resolve()` re-evaluates it on every render from the CURRENT redux state.
+ *
+ * Since every metacard prop is only ever meant to be read via
+ * `resolve()`/`ctx.resolve()` — never accessed directly — we can close that
+ * gap without re-running the mapper: replace every plain value with an
+ * equivalent `StateMapper` that looks up the metacard instance's CURRENT
+ * call-site value (via `metaCardCtxtPropsStore`, which `card.tsx` refreshes
+ * on every render of the metacard's top card) instead of the value captured
+ * when the mapper ran. `resolve()` cannot tell the difference: a function is
+ * a function, "just looking up different sources" — the plain-value case now
+ * simply re-reads its own source's current value on every call, matching the
+ * selector case's reactivity for free.
+ *
+ * `cardType` and `on*` event-handler props are passed through unchanged —
+ * they are structural / never read via `resolve()`.
+ */
+function makeLiveMetaProps(metaName: string, parameters: PiCardDef): PiCardDef {
+  const live: PiCardDef = { cardType: parameters.cardType };
+  Object.entries(parameters).forEach(([k, v]) => {
+    if (k === "cardType" || k.startsWith("on") || typeof v === "function") {
+      live[k] = v; // events & already-a-selector props pass through unchanged
+      return;
+    }
+    live[k] = ((_state: ReduxState, ctx: StateMapperContext<any>): unknown => {
+      // `metaCardCtxtPropsStore[metaName]` IS the CardProp that was passed as
+      // the metacard's own ctxtProps (see GenericCardComponentImpl in
+      // card.tsx, written on every render of the metacard's top card) — the
+      // call-site's props live directly on it, keyed the same as `parameters`.
+      const raw = metaCardCtxtPropsStore[metaName] as { [key: string]: unknown } | undefined;
+      // Fall back to `v` (the value at mapper-run time) when there is no live
+      // entry yet — e.g. the very first call, before any commit has run.
+      const cur = raw && k in raw ? raw[k] : v;
+      return typeof cur === "function" ? ctx.resolve(cur as any) : cur;
+    }) as GenericCardParameterT;
+  });
+  return live;
+}
+
 function _registerMetadataCard(
   metaName: string,
   parameters: PiCardDef,
@@ -346,7 +396,7 @@ function _registerMetadataCard(
     }
     return result;
   }
-  const top = mc.mapper(metaName, parameters, registerCard);
+  const top = mc.mapper(metaName, makeLiveMetaProps(metaName, parameters), registerCard);
   // Normalise mc.events keys from UPPER_SNAKE_CASE (as produced by
   // registerActions) to camelCase "on…" form so that processEventParameter
   // can match "onSelectedMapper" against "onSelected" rather than "SELECTED".
@@ -428,19 +478,22 @@ export function createCardDeclaration<Props = {}, Events = {}>(
 }
 
 /**
- * Like {@link createCardDeclaration} but with an explicit split between
- * **dynamic** props (may be state-selector functions) and **static** props
- * (must always be plain values — selectors are rejected by TypeScript).
+ * Like {@link createCardDeclaration}, but keeps `DynProps` / `StaticProps` as
+ * two separate type parameters purely for **documentation** at the
+ * declaration site — e.g. "this card author expects `value` to vary and
+ * `label` to stay fixed".
  *
- * ```
- *  DynProps    → wrapped in PiMapProps<…> → each key accepts T | StateMapper<T>
- *  StaticProps → passed through as-is     → each key accepts only T
- * ```
+ * There is no runtime or call-site enforcement of that split: every prop in
+ * both groups accepts `T | StateMapper<T, S, C>`, exactly like
+ * `createCardDeclaration`. Framework-level reactivity for metacards is now
+ * applied uniformly to every prop (see `PiMetaProps` / the metacards guide),
+ * so restricting `StaticProps` to plain values at the call site would only
+ * prevent legitimate uses without buying any additional correctness — a
+ * caller should be free to choose a plain value or a selector for any prop,
+ * regardless of how the card author labeled it.
  *
- * @typeParam DynProps    - Props whose values may be plain values OR `memo(...)`
- *                          state-selector functions.
- * @typeParam StaticProps - Props whose values must be plain values only.
- *                          Passing a selector function here is a TypeScript error.
+ * @typeParam DynProps    - Props documented as "expected to vary".
+ * @typeParam StaticProps - Props documented as "expected to stay fixed".
  * @typeParam Events      - Event handler / mapper types (same role as in
  *                          `createCardDeclaration`).
  *
@@ -456,11 +509,8 @@ export function createCardDeclaration<Props = {}, Events = {}>(
  *   MyEvents
  * >("pi/myCard");
  *
- * // ✅ OK — title can be a selector
- * MyCard({ title: memo((s) => s.pageTitle, eq), navLinks: [] });
- *
- * // ❌ TypeScript error — navLinks must be a plain array
- * MyCard({ title: "hello", navLinks: memo((s) => s.links, eq) });
+ * // ✅ OK — every prop (dynamic or static) may be a plain value or a selector
+ * MyCard({ title: memo((s) => s.pageTitle, eq), navLinks: (s) => s.navLinks });
  * ```
  */
 export function createCardDeclaration2<
@@ -469,7 +519,7 @@ export function createCardDeclaration2<
   Events = object,
 >(
   cardType: string,
-): <S extends ReduxState>(p: StaticProps & PiMapProps<DynProps, S, Events>) => PiCardDef {
+): <S extends ReduxState>(p: PiMapProps<DynProps & StaticProps, S, Events>) => PiCardDef {
   return (p) => ({ ...(p as object), cardType }) as PiCardDef;
 }
 

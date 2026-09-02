@@ -412,9 +412,13 @@ export type CounterChangeEvent = { value: number }
 // Every prop may be a plain value OR a state-selector (PiMapProps permits both):
 export const Counter = createCardDeclaration<CounterProps, CounterEvents>(COUNTER_CARD)
 
-// ── OR ── enforce a static / dynamic split at the call-site:
-// type CounterDynProps    = { value: number }   // must be a selector
-// type CounterStaticProps = { label: string }   // must be a plain value
+// ── OR ── use createCardDeclaration2 purely to DOCUMENT which props a card
+// author expects to vary vs. stay fixed. This has no effect on what a caller
+// may pass — every prop in both groups still accepts a plain value or a
+// selector — and no effect on the mapper, which must resolve() every prop
+// either way (see Step 2).
+// type CounterDynProps    = { value: number }   // documented as "typically varies"
+// type CounterStaticProps = { label: string }   // documented as "typically fixed"
 // export const Counter = createCardDeclaration2<CounterDynProps, CounterStaticProps, CounterEvents>(COUNTER_CARD)
 
 export const COUNTER_ACTION = registerActions(COUNTER_CARD, ["changed"])
@@ -426,8 +430,12 @@ export const onCounterChanged = createOnAction<CounterChangeEvent>(COUNTER_ACTIO
 **Step 2 — write the mapper:**
 
 Use `PiMapProps<Props & Events>` when every prop may be either a plain value or a selector.
-Use `PiMetaProps<DynProps, StaticProps, Events>` when you want the mapper to enforce that static
-props are always plain values and dynamic props are always selectors — matching `createCardDeclaration2`.
+Use `PiMetaProps<DynProps, StaticProps, Events>` when pairing with `createCardDeclaration2` purely for
+documentation purposes. **In both cases every prop the mapper receives is a `StateMapper<T>` — always
+read it with `resolve()`, even props declared under `StaticProps`.** This is what keeps a metacard
+reactive even when it's used as an anonymous/inline card with a freshly-computed plain value on every
+parent render (e.g. `Stack({content: [Counter({value: someComputedNumber})]})`) — the mapper runs once,
+but `resolve()` always re-reads the call-site's *current* value, not the value frozen when the mapper ran.
 
 ```ts
 // Standard (all props may be plain or selector):
@@ -480,8 +488,7 @@ function CounterMapper(
 //   props: PiMetaProps<CounterDynProps, CounterStaticProps, CounterEvents>,
 //   registerCard: RegisterCardF,
 // ): PiCardDef {
-//   const labelText = props.label        // guaranteed plain string — no resolve() needed
-//   // props.value is guaranteed StateMapper — always use resolve()
+//   // Every prop — dynamic or static — is a StateMapper. Always resolve():
 //   return Stack({
 //     content: [
 //       Button({
@@ -491,7 +498,7 @@ function CounterMapper(
 //           value: resolve(props.value) - 1,
 //         }),
 //       }),
-//       Typography({ text: (_, {resolve}: PiMetaResolveCtx) => `${labelText}: ${resolve(props.value)}` }),
+//       Typography({ text: (_, {resolve}: PiMetaResolveCtx) => `${resolve(props.label)}: ${resolve(props.value)}` }),
 //       Button({
 //         label: "+",
 //         onClickedMapper: (_, {resolve}: PiMetaResolveCtx) => ({
@@ -536,7 +543,8 @@ registerCard(
 - Sub-card names passed to `registerCard` are automatically prefixed with the metacard instance name — use short local names like `"plus"`.
 - Use card declaration helpers (`Button(...)`, `Typography(...)`) in the mapper — not raw `{cardType: "..."}` strings.
 - `props` in the concrete mapper CAN be typed more specifically than `any` (see [Metacards guide](https://ivcap-works.github.io/pihanga-core/guides/metacards/)).
-- **Typed static / dynamic split:** use `createCardDeclaration2<DynProps, StaticProps, Events>` (call-site enforcement) together with `PiMetaProps<DynProps, StaticProps, Events>` (mapper-side enforcement) when some props must always be plain values and others must always be state selectors. Annotate `ctx` as `PiMetaResolveCtx` in sub-card prop functions to narrow `resolve` to selector-only. All three types are exported from `@pihanga2/core`.
+- **`createCardDeclaration2` / `PiMetaProps` / `PiMetaResolveCtx`:** these types exist purely to *document* which props a metacard author expects to vary vs. stay fixed — they impose **no runtime restriction**. Every prop, in both groups, may be a plain value or a state selector at the call site, and the mapper always receives a `StateMapper<T>` for every prop (`resolve()` required, no exceptions) — this is what keeps every metacard prop reactive, including plain literals passed to an anonymous/inline usage. Annotate `ctx` as `PiMetaResolveCtx` in sub-card prop functions purely to catch accidentally calling `resolve()` on something that isn't a `StateMapper`. All three types are exported from `@pihanga2/core`.
+- **Reactivity has one hard limit:** a metacard's mapper function runs exactly once, when the instance is first registered. `resolve()` makes prop *values* reactive, but it can't change *how many or which* sub-cards the mapper created — a prop used to control the shape of the expansion (e.g. looping `registerCard()` a variable number of times) is fixed at first render.
 
 ### Reducers outside components
 

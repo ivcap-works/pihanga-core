@@ -400,24 +400,25 @@ export type MetaCardMapperF = (
 // TYPED METACARD HELPERS
 
 /**
- * Typed props for meta-card mappers that enforce a hard separation between
- * **static** and **dynamic** props.
+ * Typed props for meta-card mappers.
  *
- * | Kind | Type in mapper | Allowed at call-site |
- * |---|---|---|
- * | `StaticProps` | plain `T` | only plain values |
- * | `DynProps` | `StateMapper<T, S, C>` (a function) | only `memo(...)` selectors |
+ * **No static/dynamic split at runtime.** Every prop a metacard call-site can
+ * supply — whether declared as `DynProps` or `StaticProps` — is delivered to
+ * the mapper as a `StateMapper<T, S, C>` and MUST be read via `resolve()`.
+ * This is what allows the underlying framework to keep every metacard prop
+ * reactive: the call-site's *current* value (plain or selector) is re-read on
+ * every `resolve()` call, not frozen at the time the mapper first ran.
  *
- * Compared to {@link PiMapProps} — which allows every prop to be either a
- * plain value **or** a selector — `PiMetaProps`:
- *  - refuses a `memo(...)` for a static prop (TypeScript compile error)
- *  - refuses a plain value for a dynamic prop (TypeScript compile error)
+ * The `DynProps` / `StaticProps` split is purely a **call-site** convenience —
+ * see `createCardDeclaration2` — for cases where you want to document which
+ * props a card author expects to vary. It has no effect on how the mapper
+ * receives or must read the prop.
  *
  * Event handler/mapper keys are inherited from `PiMapProps<object, S, Events, C>`,
  * since `EventHandler` and `EventMapper` are not individually exported from core.
  *
- * @typeParam DynProps    - Props that must be `StateMapper` selectors.
- * @typeParam StaticProps - Props that must be plain values.
+ * @typeParam DynProps    - Props documented as "expected to vary".
+ * @typeParam StaticProps - Props documented as "expected to stay fixed".
  * @typeParam Events      - Event handler/mapper types.
  * @typeParam S           - Redux state type (defaults to `ReduxState`).
  * @typeParam C           - Context type (defaults to `PiDefCtxtProps`).
@@ -432,7 +433,11 @@ export type MetaCardMapperF = (
  *   _: string,
  *   props: PiMetaProps<MyDynProps, MyStaticProps, MyEvents>,
  *   registerCard: RegisterCardF,
- * ): PiCardDef { ... }
+ * ): PiCardDef {
+ *   // Both props.value and props.label are StateMapper<T> — always resolve():
+ *   const label = resolve(props.label);
+ *   ...
+ * }
  * ```
  */
 export type PiMetaProps<
@@ -441,16 +446,18 @@ export type PiMetaProps<
   Events = object,
   S extends ReduxState = ReduxState,
   C = PiDefCtxtProps,
-> = StaticProps & {
+> = {
   readonly [K in keyof DynProps]: StateMapper<DynProps[K], S, C>;
+} & {
+  readonly [K in keyof StaticProps]: StateMapper<StaticProps[K], S, C>;
 } & PiMapProps<object, S, Events, C>;
 
 /**
  * A narrowed resolve context for `PiMetaProps`-typed mappers.
  *
  * Unlike `StateMapperContext.resolve` which accepts `T | StateMapper<T>`, this
- * variant accepts **only** `StateMapper<T>` — matching the constraint that
- * every dynamic prop is always a selector, never a plain value.
+ * variant accepts **only** `StateMapper<T>` — matching the fact that every
+ * `PiMetaProps` prop (dynamic or static) is always delivered as a selector.
  *
  * Structurally compatible with `StateMapperContext`, so it can be used as an
  * annotation on the `ctx` parameter of a child card's prop function:

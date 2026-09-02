@@ -342,6 +342,135 @@ describe("metacard metaCard tagging", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Metacard prop reactivity — plain (non-selector) call-site values must stay
+// reactive across re-registration of the SAME (typically anonymous) card
+// name, mirroring what already works for selector-style props.
+//
+// See discussion: a metacard mapper runs exactly once; a plain prop value
+// baked into the raw parameters would otherwise be frozen forever in the
+// mapper's closure. `makeLiveMetaProps` closes that gap by handing the mapper
+// a StateMapper for every prop that re-reads metaCardCtxtPropsStore (which
+// card.tsx refreshes on every render of the metacard's top card) instead of
+// the value captured when the mapper ran.
+// ---------------------------------------------------------------------------
+
+describe("metacard prop reactivity (makeLiveMetaProps)", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+  const registerCardF: RegisterCardF = (name, params) =>
+    _registerCard(name, params, noopReducer);
+  const resolveNow = (fn: any) =>
+    fn({}, { cardName: "x", resolve: (p: any) => (typeof p === "function" ? p({}, {} as any) : p) });
+
+  it("a plain (non-selector) prop resolves to the CURRENT call-site value after re-registration under the same name", () => {
+    const innerType = `live-inner-${uid()}`;
+    const metaType = `live-meta-${uid()}`;
+    const metaName = `live-inst-${uid()}`;
+
+    addCardComponent({ name: innerType, component: () => null });
+
+    // Mapper embeds props.count into a sub-card's state-mapper prop, exactly
+    // as documented metacard authors are required to do (always resolve()).
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, props: any, rc) => {
+        rc("child", {
+          cardType: innerType,
+          value: (_s: any, ctx: StateMapperContext<any>) => ctx.resolve(props.count),
+        } as any);
+        return { cardType: innerType };
+      },
+    });
+
+    // First registration — anonymous-card-style plain literal value.
+    _registerCard(metaName, { cardType: metaType, count: 1 } as any, noopReducer);
+    // Simulate the top card's render writing its CURRENT ctxtProps into the
+    // store (normally done synchronously by GenericCardComponent in card.tsx).
+    metaCardCtxtPropsStore[metaName] = { cardName: metaName, count: 1 } as any;
+
+    const childMapping = cardMappings[`${metaName}/child`];
+    expect(childMapping).toBeDefined();
+    expect(resolveNow(childMapping.props.value)).toBe(1);
+
+    // Re-render the SAME anonymous card name with a NEW plain value — this
+    // mirrors `Stack({content: [Foo({count: random()})]})` on a parent
+    // re-render. The mapper is NOT re-run (metaCard top cards are skipped by
+    // checkForAnonymousCard's update guard) — only the live store is updated,
+    // exactly as card.tsx does on every render of the metacard's top card.
+    metaCardCtxtPropsStore[metaName] = { cardName: metaName, count: 42 } as any;
+
+    // The SAME sub-card mapping (never re-created) must now resolve to 42 —
+    // proving reactivity flows through resolve()/metaCardCtxtPropsStore, not
+    // through re-invoking the mapper.
+    expect(resolveNow(childMapping.props.value)).toBe(42);
+
+    delete metaCardCtxtPropsStore[metaName];
+  });
+
+  it("falls back to the mapper-run-time value when metaCardCtxtPropsStore has no live entry yet", () => {
+    const innerType = `live-fallback-inner-${uid()}`;
+    const metaType = `live-fallback-meta-${uid()}`;
+    const metaName = `live-fallback-inst-${uid()}`;
+
+    addCardComponent({ name: innerType, component: () => null });
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, props: any, rc) => {
+        rc("child", {
+          cardType: innerType,
+          value: (_s: any, ctx: StateMapperContext<any>) => ctx.resolve(props.label),
+        } as any);
+        return { cardType: innerType };
+      },
+    });
+
+    _registerCard(metaName, { cardType: metaType, label: "hello" } as any, noopReducer);
+
+    // No metaCardCtxtPropsStore entry has been written (simulates calling
+    // _registerCard before any render has committed).
+    const childMapping = cardMappings[`${metaName}/child`];
+    expect(resolveNow(childMapping.props.value)).toBe("hello");
+  });
+
+  it("a selector-style prop passed to a metacard is left untouched (not double-wrapped) and still resolves against the live redux state", () => {
+    const innerType = `live-selector-inner-${uid()}`;
+    const metaType = `live-selector-meta-${uid()}`;
+    const metaName = `live-selector-inst-${uid()}`;
+
+    addCardComponent({ name: innerType, component: () => null });
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, props: any, rc) => {
+        rc("child", {
+          cardType: innerType,
+          value: (_s: any, ctx: StateMapperContext<any>) => ctx.resolve(props.count),
+        } as any);
+        return { cardType: innerType };
+      },
+    });
+
+    const countSelector = (s: any) => s.count;
+    _registerCard(metaName, { cardType: metaType, count: countSelector } as any, noopReducer);
+
+    const childMapping = cardMappings[`${metaName}/child`];
+    const state = { count: 7 };
+    const resolveWithState = (fn: any) =>
+      fn(state, {
+        cardName: metaName,
+        resolve: (p: any) => (typeof p === "function" ? p(state, {} as any) : p),
+      });
+    expect(resolveWithState(childMapping.props.value)).toBe(7);
+
+    // Changing the redux state (not the selector identity) changes the result —
+    // exactly the reactivity that already worked before this fix.
+    state.count = 99;
+    expect(resolveWithState(childMapping.props.value)).toBe(99);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Event mapper / metacard event forwarding
 // ---------------------------------------------------------------------------
 
