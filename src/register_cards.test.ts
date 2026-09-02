@@ -386,7 +386,14 @@ describe("metacard prop reactivity (makeLiveMetaProps)", () => {
     _registerCard(metaName, { cardType: metaType, count: 1 } as any, noopReducer);
     // Simulate the top card's render writing its CURRENT ctxtProps into the
     // store (normally done synchronously by GenericCardComponent in card.tsx).
-    metaCardCtxtPropsStore[metaName] = { cardName: metaName, count: 1 } as any;
+    // For an ANONYMOUS usage, `<Card>`'s own `cardName` prop IS the raw
+    // PiCardDef — i.e. `.cardName` here is an OBJECT holding the metacard's
+    // call-site props, not the metacard's registry name (a common source of
+    // confusion — verified against production render output).
+    metaCardCtxtPropsStore[metaName] = {
+      cardName: { cardType: metaType, count: 1 },
+      parentCard: "parent",
+    } as any;
 
     const childMapping = cardMappings[`${metaName}/child`];
     expect(childMapping).toBeDefined();
@@ -397,7 +404,10 @@ describe("metacard prop reactivity (makeLiveMetaProps)", () => {
     // re-render. The mapper is NOT re-run (metaCard top cards are skipped by
     // checkForAnonymousCard's update guard) — only the live store is updated,
     // exactly as card.tsx does on every render of the metacard's top card.
-    metaCardCtxtPropsStore[metaName] = { cardName: metaName, count: 42 } as any;
+    metaCardCtxtPropsStore[metaName] = {
+      cardName: { cardType: metaType, count: 42 },
+      parentCard: "parent",
+    } as any;
 
     // The SAME sub-card mapping (never re-created) must now resolve to 42 —
     // proving reactivity flows through resolve()/metaCardCtxtPropsStore, not
@@ -431,6 +441,38 @@ describe("metacard prop reactivity (makeLiveMetaProps)", () => {
     // _registerCard before any render has committed).
     const childMapping = cardMappings[`${metaName}/child`];
     expect(resolveNow(childMapping.props.value)).toBe("hello");
+  });
+
+  it("falls back to the mapper-run-time value for a NAMED metacard usage (cardName is a plain string, not the raw PiCardDef)", () => {
+    const innerType = `live-named-inner-${uid()}`;
+    const metaType = `live-named-meta-${uid()}`;
+    const metaName = `live-named-inst-${uid()}`;
+
+    addCardComponent({ name: innerType, component: () => null });
+
+    registerMetacard(registerCardF)({
+      type: metaType,
+      mapper: (_name, props: any, rc) => {
+        rc("child", {
+          cardType: innerType,
+          value: (_s: any, ctx: StateMapperContext<any>) => ctx.resolve(props.label),
+        } as any);
+        return { cardType: innerType };
+      },
+    });
+
+    _registerCard(metaName, { cardType: metaType, label: "fixed-name" } as any, noopReducer);
+
+    // A NAMED usage (`registerCard("name", Foo({...}))`) is rendered as
+    // `<Card cardName="name" .../>` — its `.cardName` is the STRING registry
+    // key, never the raw PiCardDef, so there is no live source to read and
+    // the wrapper must fall back to the mapper-run-time value.
+    metaCardCtxtPropsStore[metaName] = { cardName: metaName, parentCard: "p" } as any;
+
+    const childMapping = cardMappings[`${metaName}/child`];
+    expect(resolveNow(childMapping.props.value)).toBe("fixed-name");
+
+    delete metaCardCtxtPropsStore[metaName];
   });
 
   it("a selector-style prop passed to a metacard is left untouched (not double-wrapped) and still resolves against the live redux state", () => {

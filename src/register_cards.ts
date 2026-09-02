@@ -355,13 +355,27 @@ function makeLiveMetaProps(metaName: string, parameters: PiCardDef): PiCardDef {
       return;
     }
     live[k] = ((_state: ReduxState, ctx: StateMapperContext<any>): unknown => {
-      // `metaCardCtxtPropsStore[metaName]` IS the CardProp that was passed as
-      // the metacard's own ctxtProps (see GenericCardComponentImpl in
-      // card.tsx, written on every render of the metacard's top card) — the
-      // call-site's props live directly on it, keyed the same as `parameters`.
-      const raw = metaCardCtxtPropsStore[metaName] as { [key: string]: unknown } | undefined;
+      // `metaCardCtxtPropsStore[metaName]` is the raw `CardProp` that was
+      // passed to the metacard's `<Card>` element (written by
+      // GenericCardComponentImpl in card.tsx on every render of the
+      // metacard's top card). Its `.cardName` field holds the call-site's
+      // props:
+      //  - ANONYMOUS usage (`Foo({count}) embedded inline`): `.cardName` IS
+      //    the raw PiCardDef object (`{cardType, count, ...}`) — the
+      //    metacard's own props live there, keyed the same as `parameters`.
+      //  - NAMED usage (`registerCard("name", Foo({count}))`): `.cardName` is
+      //    just the string `"name"` — the metacard's construction props were
+      //    only ever passed at registration time, never through a `<Card>`
+      //    element, so there is no live source to re-read; fall through to
+      //    the mapper-run-time value `v` below.
+      const stored = metaCardCtxtPropsStore[metaName];
+      const raw =
+        stored && typeof stored.cardName === "object" && stored.cardName !== null
+          ? (stored.cardName as { [key: string]: unknown })
+          : undefined;
       // Fall back to `v` (the value at mapper-run time) when there is no live
-      // entry yet — e.g. the very first call, before any commit has run.
+      // entry yet — e.g. the very first call, before any commit has run — or
+      // for a named-card usage, which has no live source (see above).
       const cur = raw && k in raw ? raw[k] : v;
       return typeof cur === "function" ? ctx.resolve(cur as any) : cur;
     }) as GenericCardParameterT;
