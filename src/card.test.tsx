@@ -13,6 +13,7 @@
  */
 import React from "react";
 import { render, act } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { configureStore } from "@reduxjs/toolkit";
 import { Provider } from "react-redux";
 import { describe, it, expect } from "vitest";
@@ -456,6 +457,116 @@ describe("A7 — anonymous cards: stable IDs and cleanup on unmount", () => {
     expect(newKeys.length).toBe(2);
     expect(new Set(newKeys).size).toBe(2);
   });
+
+describe("orphan sweep — tracked anonymous roots", () => {
+  /** Mapping names currently registered under `parent` for `type`. */
+  const mappingsFor = (parent: string, type: string) =>
+    Object.keys(cardMappings).filter(
+      (k) => k.startsWith(`${parent}/`) && k.includes(type),
+    );
+
+  it("a live sibling sweeps an orphan left by a render that never committed", () => {
+    const type = `sweep-orphan-${uid()}`;
+    addCardComponent({ name: type, component: () => <div /> });
+    const store = createTestStore();
+    const parent = `sweep-orphan-parent-${uid()}`;
+    const anon = <Card cardName={{ cardType: type } as any} parentCard={parent} />;
+
+    // Server render runs the component body (registering a root) but never runs effects,
+    // so the root is registered and unconfirmed — exactly what a discarded render leaves.
+    withAnonSupport(store, () =>
+      renderToString(<Provider store={store}>{anon}</Provider>),
+    );
+    const orphans = mappingsFor(parent, type);
+    expect(orphans.length).toBe(1);
+
+    const { unmount } = withAnonSupport(store, () =>
+      render(anon, { wrapper: storeWrapper(store) }),
+    );
+
+    // The orphan is swept; only the live card's mapping remains.
+    expect(cardMappings[orphans[0]]).toBeUndefined();
+    const live = mappingsFor(parent, type);
+    expect(live.length).toBe(1);
+    expect(live[0]).not.toBe(orphans[0]);
+
+    unmount();
+    expect(mappingsFor(parent, type)).toEqual([]);
+  });
+
+  it("two confirmed siblings under the same parent and type both survive", () => {
+    const type = `sweep-pair-${uid()}`;
+    addCardComponent({ name: type, component: () => <div /> });
+    const store = createTestStore();
+    const parent = `sweep-pair-parent-${uid()}`;
+
+    const { unmount } = withAnonSupport(store, () =>
+      render(
+        <>
+          <Card cardName={{ cardType: type } as any} parentCard={parent} />
+          <Card cardName={{ cardType: type } as any} parentCard={parent} />
+        </>,
+        { wrapper: storeWrapper(store) },
+      ),
+    );
+
+    // Each effect sweeps only UNCONFIRMED roots, so a confirmed sibling must not be removed.
+    expect(mappingsFor(parent, type).length).toBe(2);
+
+    unmount();
+    expect(mappingsFor(parent, type)).toEqual([]);
+  });
+});
+
+describe("_cardName — explicit name for anonymous cards", () => {
+  it("uses `${parentCard}/${_cardName}` with no id suffix and hides _cardName from props", () => {
+    const type = `named-anon-${uid()}`;
+    addCardComponent({ name: type, component: () => <div /> });
+    const store = createTestStore();
+
+    const { unmount } = withAnonSupport(store, () =>
+      render(
+        <Card
+          cardName={{ cardType: type, _cardName: "explicit-x", label: "hi" } as any}
+          parentCard="named-parent"
+        />,
+        { wrapper: storeWrapper(store) },
+      ),
+    );
+
+    const key = "named-parent/explicit-x";
+    expect(cardMappings[key]).toBeDefined();
+    expect(cardMappings[key].props).toEqual({ label: "hi" });
+    expect(cardMappings[key].props).not.toHaveProperty("_cardName");
+
+    unmount();
+    expect(cardMappings[key]).toBeUndefined();
+  });
+
+  it("appends the cardKey-based suffix when a cardKey is given", () => {
+    const type = `named-key-${uid()}`;
+    addCardComponent({ name: type, component: () => <div /> });
+    const store = createTestStore();
+
+    const { unmount } = withAnonSupport(store, () =>
+      render(
+        <Card
+          cardName={{ cardType: type, _cardName: "row" } as any}
+          parentCard="named-key-parent"
+          cardKey="r1"
+        />,
+        { wrapper: storeWrapper(store) },
+      ),
+    );
+
+    const key = "named-key-parent/row#r1";
+    expect(cardMappings[key]).toBeDefined();
+
+    unmount();
+    expect(cardMappings[key]).toBeUndefined();
+  });
+});
+
 });
 
 // ── A3 — metacard-in-content: expanded props must survive re-render ───────────

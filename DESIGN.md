@@ -187,9 +187,80 @@ checks to scope the handler to the right card instance.
 ### 3.5 Anonymous / Inline Cards
 
 When a `PiCardDef` object (not a string) is passed as `cardName`, `checkForAnonymousCard`
-synthesises a stable name from `"parentCard/cardType#randomId"` and calls `_registerCard` or
-`_updateCardMapping` as needed. This allows card declarations to be written inline inside a
-parent card's `content` prop without requiring a separate named registration call.
+derives the registry name, calls `_registerCard` or `_updateCardMapping` as needed, and records
+the root in `anonRoots`. This lets card declarations be written inline inside a parent card's
+`content` prop without a separate named registration call.
+
+**Naming rules.** The base name and instance suffix are chosen as follows:
+
+| Definition | `cardKey` | Registry name |
+|---|---|---|
+| `_cardName: "x"` | no | `${parentCard}/x` |
+| `_cardName: "x"` | yes | `${parentCard}/x#${cardKey}` |
+| no `_cardName` | no | `${parentCard}/${type}#${useId()}` |
+| no `_cardName` | yes | `${parentCard}/${type}#${cardKey}` |
+
+- A `_cardName` is developer-chosen, so it needs no per-instance id. Uniqueness is the developer's
+  responsibility, the same as for named registrations.
+- A `cardKey` distinguishes siblings that share a name and is stable across renders, so it is the
+  whole suffix. It is never combined with the `useId()` value.
+- Generated names without a `cardKey` use `useId()`. The id differs between a discarded StrictMode
+  render and the committed one, which is why the orphan sweep needs it.
+- `_cardName` and `cardType` are structural keys: they are skipped when building props, so they never
+  reach the component.
+
+**Tracking and orphan sweep.** `anonRoots` is a `Map` from each anonymous root name to the
+`{ parent, type }` it was registered under. It does not parse names, so the naming rules above can
+change without affecting the sweep. `confirmedAnonCards` holds names whose effect has committed.
+When a card's effect runs, it removes every unconfirmed root with the same parent and type, then
+registers itself. Nested child mappings are removed together with their root by `removeCardMapping`.
+
+**Known limitations of the sweep.** The current policy deliberately errs towards keeping orphans
+rather than deleting live entries. The sweep can still over-delete in the cases below. These are
+accepted for now and will be revisited if they cause problems in practice.
+
+- **Unconfirmed live siblings can be removed.** A sibling with the same parent and type whose
+  effect has not yet run is treated as an orphan. It is removed, and it is restored only when its own
+  effect runs. A render in that window may show the unknown-card error.
+- **Explicit `_cardName` instances share one mapping.** Two instances with the same `_cardName`
+  under the same parent share a single entry. Unmounting one of them removes the entry the other
+  still renders from.
+- **Orphan roots can persist.** A root left by a discarded render stays in `anonRoots` and
+  `cardMappings` until a sweep under the same parent and type runs. If that parent and type never
+  mount again, the entries remain.
+- **Counts include child mappings.** `getCardCount()` counts nested child mappings as well as
+  top-level cards, so it overstates the number of cards an application declared.
+
+The query functions in section 3.5a are the intended way to monitor these effects before the policy
+is changed.
+
+```mermaid
+flowchart TD
+    R["render: checkForAnonymousCard"] --> A["anonRoots.set(name, {parent, type})"]
+    A --> M{"mapping exists?"}
+    M -- no --> N["_registerCard"]
+    M -- yes --> U{"props changed?"}
+    U -- yes --> P["_updateCardMapping"]
+    E["effect commits"] --> C["confirmedAnonCards.add(name)"]
+    C --> S["for each root with same parent+type,<br/>not confirmed, not self"]
+    S --> X["removeCardMapping(root), anonRoots.delete(root)"]
+    E --> Q{"mapping missing?"}
+    Q -- yes --> N2["re-register"]
+    D["unmount cleanup"] --> Z["confirmed.delete, anonRoots.delete, removeCardMapping(name)"]
+```
+
+### 3.5a Querying the Registry
+
+Two read-only functions in `src/register_cards.ts` report what the registry currently holds, and
+are exported from the package entry point:
+
+- `getCardCount(): number` — the number of entries in `cardMappings`, including named cards,
+  anonymous roots and nested child mappings.
+- `getCardNames(): string[]` — the keys of `cardMappings`. Props, event mappers and parameters are
+  not returned.
+
+These describe the registry at the time of the call. They are not reactive; read them from an
+effect or on demand rather than during render.
 
 ### 3.6 State Mappers and `memo`
 
@@ -334,11 +405,29 @@ Key properties:
 
 ### 4.6 `RegisterCardState` — Debug Slice
 
-`RegisterCardState` in `src/card.tsx` is an internal subsystem that mirrors card props into
-`state.pihanga.cards` for Redux DevTools inspection. It works on a 1-second debounce timer:
-whenever any card's props change (detected in `propEq`), a `pi/card/update_state` action is
-dispatched. The built-in `UPDATE_STATE_ACTION` reducer (always present in `mappings`) writes
-serialisable snapshots of all card props into the Redux state tree.
+`RegisterCardState` in `src/card.tsx` mirrors card activity into the Redux state tree for Redux
+DevTools inspection. The level is chosen at `start()`:
+
+| Level | `state.pihanga.cards` | `state.pihanga.cardDetails` |
+|---|---|---|
+| `false` | not written | not written |
+| `'names'` (default) | names of cards that changed | not written |
+| `'props'` | names of cards that changed | serialisable props per changed card |
+| `'diff'` | names of cards that changed | props plus `{ from, to }` for each changed prop |
+
+- Set the level with `cardTracking`. The legacy `debugCardState` flag maps to `'props'` when
+  `cardTracking` is not given.
+- Change detection runs in a `useEffect` in `GenericCardComponent`, after every render. It compares
+  the current props reference with the previous one, so it does not depend on `propEq`.
+- Each change schedules a `pi/card/update_state` action after a debounce. The default debounce is
+  1000 ms, configurable with `cardTrackingDebounceMs`. The timer only fires when there are pending
+  changes.
+- The built-in `UPDATE_STATE_ACTION` reducer is registered in `mappings` for every level. It copies
+  the pending changed names into `pihanga.cards`, and for `'props'` and `'diff'` writes the
+  snapshots into `pihanga.cardDetails`. Props are copied through a safe-copy step, and `cardName`
+  and `cardKey` are removed from the snapshot since they are redundant as keys.
+- `'props'` and `'diff'` add work on every card render, so they should be enabled only while
+  inspecting the DevTools card view.
 
 ---
 

@@ -87,6 +87,22 @@ export function resolveCardType(name: string): PiRegisterComponent | undefined {
 export const cardMappings: { [k: string]: CardMapping } = {};
 export const dispatch2registerReducer: [React.Dispatch<any>, PiRegisterReducerF][] = [];
 
+/**
+ * Number of card instances currently held in the registry, including named
+ * cards, anonymous roots, and nested child mappings.
+ */
+export function getCardCount(): number {
+  return Object.keys(cardMappings).length;
+}
+
+/**
+ * Names of the card instances currently held in the registry. Only names are
+ * returned; props, event mappers and parameters are not exposed.
+ */
+export function getCardNames(): string[] {
+  return Object.keys(cardMappings);
+}
+
 export function addCardComponent(card: PiRegisterComponent): void {
   if (cardTypes[card.name]) {
     logger.warn(`Overwriting definition for card type "${card.name}"`);
@@ -205,7 +221,7 @@ export function _createCardMapping(
   const reducerCancels: PiReducerCancelF[] = [];
 
   Object.entries(parameters).forEach(([k, v]) => {
-    if (k === "cardType") return;
+    if (k === "cardType" || k === "_cardName") return;
     if (isCardRef(v)) {
       // B1: use isCardRef (which guards against null) instead of raw typeof check
       const cd = v as PiCardDef;
@@ -350,6 +366,7 @@ function normalizeEventKeys(events: { [k: string]: string } | undefined): {
 function makeLiveMetaProps(metaName: string, parameters: PiCardDef): PiCardDef {
   const live: PiCardDef = { cardType: parameters.cardType };
   Object.entries(parameters).forEach(([k, v]) => {
+    if (k === "_cardName") return; // naming key only, never a prop
     if (k === "cardType" || k.startsWith("on") || typeof v === "function") {
       live[k] = v; // events & already-a-selector props pass through unchanged
       return;

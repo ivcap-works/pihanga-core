@@ -43,24 +43,20 @@ type CardInfo = {
 // `useEffect` destructor in `GenericCard`.
 
 /**
- * Anonymous card names whose owning component instance has COMMITTED (its
- * effect ran). Registrations made during a render pass that React discarded
- * (StrictMode double-invoke, aborted concurrent render) never appear here and
- * are garbage-collected by the orphan sweep in CardImpl's effect.
+ * Anonymous root mapping names whose owning component instance has COMMITTED
+ * (its effect ran). Registrations made during a render pass that React
+ * discarded (StrictMode double-invoke, aborted concurrent render) never appear
+ * here and are garbage-collected by the orphan sweep in CardImpl's effect.
  */
 const confirmedAnonCards = new Set<string>();
 
 /**
- * The anonymous ROOT of a mapping name: `"parent/type#id/child"` → the part up
- * to the first `/` after the `#`. Descendant mappings (nested inline card
- * defs) are confirmed via their root, not individually.
+ * Every anonymous root registered by checkForAnonymousCard, whatever its name
+ * format, mapped to the parent and type it was registered under. The orphan
+ * sweep uses this record instead of parsing names. Nested child mappings are
+ * not tracked here; removeCardMapping removes them together with their root.
  */
-function anonRootOf(name: string): string {
-  const hash = name.indexOf("#");
-  if (hash < 0) return name;
-  const slash = name.indexOf("/", hash);
-  return slash < 0 ? name : name.slice(0, slash);
-}
+const anonRoots = new Map<string, { parent: string; type: string }>();
 
 // A1: memoised — Card's own props are stable strings, so React.memo prevents
 // cascade re-renders from parent components re-rendering.
@@ -117,16 +113,25 @@ function CardImpl(props: CardProp): React.JSX.Element {
       // simulated unmount / orphan sweep, or unmount/remount with same id).
       checkForAnonymousCard(cardImplPropsRef.current, autoId, dispatch);
     }
-    // Sweep orphans left by discarded render passes: same "<parent>/<type>#"
-    // prefix (incl. cardKey), registered during render but never confirmed.
-    const prefix = cardName.slice(0, cardName.lastIndexOf("#") + 1);
-    Object.keys(cardMappings).forEach((k) => {
-      if (k.startsWith(prefix) && !confirmedAnonCards.has(anonRootOf(k))) {
-        removeCardMapping(k);
-      }
-    });
+    // Sweep orphans left by discarded render passes: unconfirmed anonymous roots
+    // registered under the same parent and type as this card.
+    const owner = anonRoots.get(cardName);
+    if (owner) {
+      anonRoots.forEach((o, root) => {
+        if (
+          root !== cardName &&
+          !confirmedAnonCards.has(root) &&
+          o.parent === owner.parent &&
+          o.type === owner.type
+        ) {
+          removeCardMapping(root);
+          anonRoots.delete(root);
+        }
+      });
+    }
     return () => {
       confirmedAnonCards.delete(cardName);
+      anonRoots.delete(cardName);
       removeCardMapping(cardName);
     };
   }, [isAnonymous, cardName, autoId, dispatch]); // stable: derived from stable autoId + parentCard
@@ -204,18 +209,28 @@ function checkForAnonymousCard(
     return ""; // not sure what that is
   }
   // looks like a potentially unregistered card
+  // An explicit `_cardName` is developer-chosen and therefore already unique,
+  // like a named registration. It replaces the cardType-derived base name.
+  const explicitName = props.cardName?._cardName;
+  const hasExplicitName = typeof explicitName === "string" && explicitName !== "";
   let cardName: string;
-  if (props.parentCard) {
+  if (hasExplicitName) {
+    cardName = props.parentCard ? `${props.parentCard}/${explicitName}` : explicitName;
+  } else if (props.parentCard) {
     cardName = `${props.parentCard}/${cardType.split("/").pop()}`;
   } else {
     cardName = cardType;
   }
+  // Instance suffix: a developer-given cardKey distinguishes siblings and is stable
+  // across renders, so it alone is the suffix. Generated names without a cardKey
+  // need the per-instance id; explicit names without a cardKey get none.
   if (props.cardKey) {
-    cardName = `${cardName}#${props.cardKey}-${id}`;
-  } else {
+    cardName = `${cardName}#${props.cardKey}`;
+  } else if (!hasExplicitName) {
     cardName = `${cardName}#${id}`;
   }
 
+  anonRoots.set(cardName, { parent: props.parentCard ?? "", type: cardType });
   const mapping = cardMappings[cardName];
   const parameters = props.cardName as PiCardDef;
   const el = dispatch2registerReducer.find(([d, _]) => d === dispatch);

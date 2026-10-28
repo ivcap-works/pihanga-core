@@ -15,6 +15,8 @@ import {
   cardTypes,
   createCardDeclaration,
   createCardDeclaration2,
+  getCardCount,
+  getCardNames,
   isCardRef,
   memo,
   metaCardCtxtPropsStore,
@@ -1181,6 +1183,26 @@ describe("createCardDeclaration2", () => {
 // ---------------------------------------------------------------------------
 // removeCardMapping — cleanup of named and child mappings
 // ---------------------------------------------------------------------------
+
+describe("getCardCount / getCardNames", () => {
+  const uid = () => Math.random().toString(36).slice(2);
+  const noopReducer = (() => () => {}) as unknown as PiRegisterReducerF;
+
+  it("count and names match cardMappings and expose no props", () => {
+    const type = `count-type-${uid()}`;
+    addCardComponent({ name: type, component: () => null });
+    const name = `count-inst-${uid()}`;
+    _registerCard(name, { cardType: type, label: "secret" } as any, noopReducer);
+
+    expect(getCardCount()).toBe(Object.keys(cardMappings).length);
+    expect(getCardNames()).toContain(name);
+    expect(getCardNames()).toEqual(Object.keys(cardMappings));
+    expect(getCardNames().every((n) => typeof n === "string")).toBe(true);
+
+    removeCardMapping(name);
+    expect(getCardNames()).not.toContain(name);
+  });
+});
 
 describe("removeCardMapping", () => {
   const uid = () => Math.random().toString(36).slice(2);

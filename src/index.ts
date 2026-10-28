@@ -146,6 +146,8 @@ export {
   createCardDeclaration,
   createCardDeclaration2,
   isCardRef,
+  getCardCount,
+  getCardNames,
 } from "./register_cards";
 export { getLogger, setLogConfig } from "./logger";
 export type { LogConfig, LogLevelName } from "./logger";
