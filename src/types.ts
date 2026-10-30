@@ -378,6 +378,8 @@ export type GenericCardParameterT = unknown | StateMapper<unknown, ReduxState, u
 
 export type PiCardDef = {
   cardType: string;
+  /** Developer-chosen registry name for anonymous cards; never passed as a prop. */
+  _cardName?: string;
 } & {
   [k: string]: GenericCardParameterT;
 };
