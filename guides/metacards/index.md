@@ -408,3 +408,8 @@ text: (_, ctx: PiMetaResolveCtx) => `Count: ${ctx.resolve(props.value)}`,
 
 !!! warning "metaCtxtProps undefined for non-sub-cards"
     `metaCtxtProps` is only set for cards registered *inside* a metacard mapper (sub-cards). The metacard's own top card uses `ctxtProps` as usual.
+
+!!! info "Reactivity for a plain prop value only applies to ANONYMOUS (inline) metacard usages"
+    A plain, non-selector prop stays reactive across re-renders only when the metacard is used **anonymously/inline** — e.g. `Stack({content: [Counter({value: 3})]})` — because in that case the raw `PiCardDef` (`{cardType, value: 3, ...}`) is re-supplied on every parent render and read live from the current `<Card>` element.
+
+    For a **named** usage registered once via `registerCard("page/counter", Counter({value: 3}))`, the props are only ever supplied at registration time — there is no per-render `<Card>` element carrying a fresh literal to re-read. A plain value there behaves exactly as before (fixed at registration); use a selector (`value: (s) => s.count`) if you need it to react to state changes for a named metacard instance.

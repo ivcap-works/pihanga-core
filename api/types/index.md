@@ -28,9 +28,13 @@ The serialised card instance stored in the Redux state.
 ```ts
 type PiCardDef = {
   cardType: string;
+  _cardName?: string; // developer-chosen name for anonymous cards; never passed as a prop
+} & {
   [key: string]: unknown;
 };
 ```
+
+`_cardName` sets the registry name of an anonymous card, so the card is registered as `${parentCard}/${_cardName}` with no generated `useId()` suffix. It is skipped when building props.
 
 ## `ReduxState`
 
